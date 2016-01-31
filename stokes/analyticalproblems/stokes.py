@@ -28,7 +28,11 @@ class StokesProblem(EllipticProblem):
     def __init__(self,
                  domain = RectDomain(),
                  rhs = ConstantFunction(value = np.array([[0.0], [0.0]]), dim_domain=2),
+                 rhs_functionals = None,
                  diffusion_functions = (ConstantFunction(dim_domain=2),),
+                 diffusion_functionals = None,
+                 advection_functions = None,
+                 advection_functionals = None,
                  dirichlet_data = ConstantFunction(value = np.array([[0.0], [0.0]]), dim_domain=2),
                  neumann_data = None,
                  viscosity = 1.0,
@@ -40,7 +44,11 @@ class StokesProblem(EllipticProblem):
         super(StokesProblem, self).__init__(domain=domain,
                                             rhs = rhs,
                                             diffusion_functions = diffusion_functions,
+                                            diffusion_functionals=diffusion_functionals,
+                                            advection_functions=advection_functions,
+                                            advection_functionals=advection_functionals,
                                             dirichlet_data=dirichlet_data,
                                             neumann_data=neumann_data,
                                             name=name)
+        self.rhs_functionals = rhs_functionals
         self.viscosity = viscosity
