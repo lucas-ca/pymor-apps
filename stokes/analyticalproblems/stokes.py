@@ -18,7 +18,7 @@ class StokesProblem(EllipticProblem):
     The problem consists in solving ::
 
     |  -ν ⋅ Δ u(x, μ) + ∇ p(x, μ) = f(x, μ) in Ω
-    |                   ∇ u(x, μ) = 0       in Ω
+    |                 ∇ ⋅ u(x, μ) = 0       in Ω
     |                     u(x, μ) = u_D     on Γ_D
 
     for (u, p).
