@@ -17,9 +17,9 @@ class StokesProblem(EllipticProblem):
 
     The problem consists in solving ::
 
-    |  -ν ⋅ Δ u(x, μ) + ∇ p(x,μ) = f(x, μ) in Ω
-    |                   ∇ u(x,μ) = 0       in Ω
-    |                     u(x,μ) = u_D     on Γ_D
+    |  -ν ⋅ Δ u(x, μ) + ∇ p(x, μ) = f(x, μ) in Ω
+    |                   ∇ u(x, μ) = 0       in Ω
+    |                     u(x, μ) = u_D     on Γ_D
 
     for (u, p).
 
@@ -30,9 +30,13 @@ class StokesProblem(EllipticProblem):
                  rhs = ConstantFunction(value = np.array([[0.0], [0.0]]), dim_domain=2),
                  diffusion_function = ConstantFunction(dim_domain=2),
                  dirichlet_data = ConstantFunction(value = np.array([[0.0], [0.0]]), dim_domain=2),
+                 neumann_data = None,
                  viscosity = 1.0):
         self.domain = domain
         self.rhs = rhs
         self.diffusion_function = diffusion_function
         self.dirichlet_data = dirichlet_data
+        if neumann_data is not None:
+            raise NotImplementedError
+        self.neumann_data = neumann_data
         self.viscosity = viscosity
