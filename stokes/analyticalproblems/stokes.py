@@ -28,15 +28,19 @@ class StokesProblem(EllipticProblem):
     def __init__(self,
                  domain = RectDomain(),
                  rhs = ConstantFunction(value = np.array([[0.0], [0.0]]), dim_domain=2),
-                 diffusion_function = ConstantFunction(dim_domain=2),
+                 diffusion_functions = (ConstantFunction(dim_domain=2),),
                  dirichlet_data = ConstantFunction(value = np.array([[0.0], [0.0]]), dim_domain=2),
                  neumann_data = None,
-                 viscosity = 1.0):
-        self.domain = domain
-        self.rhs = rhs
-        self.diffusion_function = diffusion_function
-        self.dirichlet_data = dirichlet_data
+                 viscosity = 1.0,
+                 name='StokesProblem'):
+
         if neumann_data is not None:
             raise NotImplementedError
-        self.neumann_data = neumann_data
+
+        super(StokesProblem, self).__init__(domain=domain,
+                                            rhs = rhs,
+                                            diffusion_functions = diffusion_functions,
+                                            dirichlet_data=dirichlet_data,
+                                            neumann_data=neumann_data,
+                                            name=name)
         self.viscosity = viscosity
