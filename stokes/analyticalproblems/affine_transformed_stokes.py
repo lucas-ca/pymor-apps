@@ -136,8 +136,8 @@ class AffineTransformedStokes(StokesProblem):
 
         # rhs
         self.rhs_functionals = [GenericParameterFunctional(mapping=partial(evaluate_rhs_functional(), entry=(0, 0)),
-                                                                 parameter_type={'transformation': (2, 2)},
-                                                                 name='Transformation'),
+                                                           parameter_type={'transformation': (2, 2)},
+                                                           name='Transformation'),
                                 GenericParameterFunctional(mapping=partial(evaluate_rhs_functional(), entry=(0, 1)),
                                                            parameter_type={'transformation': (2, 2)},
                                                            name='Transformation'),
