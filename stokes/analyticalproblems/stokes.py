@@ -43,7 +43,7 @@ class StokesProblem(EllipticProblem):
             raise NotImplementedError
 
         super(StokesProblem, self).__init__(domain=domain,
-                                            diffusion_functions = diffusion_functions,
+                                            diffusion_functions=diffusion_functions,
                                             diffusion_functionals=diffusion_functionals,
                                             advection_functions=advection_functions,
                                             advection_functionals=advection_functionals,
