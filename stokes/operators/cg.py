@@ -12,6 +12,7 @@ from pymor.functions.interfaces import FunctionInterface
 from pymor.grids.referenceelements import line, triangle
 from pymor.operators.numpy import NumpyMatrixBasedOperator
 from pymor.vectorarrays.numpy import NumpyVectorSpace
+from pymor.vectorarrays.interfaces import VectorSpace
 
 from stokes.functions.finite_elements import P2ShapeFunctions, P2ShapeFunctionGradients
 
@@ -307,3 +308,41 @@ class L2ProductP2(NumpyMatrixBasedOperator):
         del SF_INTS, SF_I0, SF_I1
 
         return csc_matrix(A).copy()
+
+
+class ZeroOperator(NumpyMatrixBasedOperator):
+    """An operator represented by a range x source zero matrix.
+    """
+
+    def __init__(self, source, range, sparse=False, name=None):
+        assert isinstance(source, (VectorSpace, int))
+        assert isinstance(range, (VectorSpace, int))
+
+        self.source = NumpyVectorSpace(source) if isinstance(source, int) else source
+        self.range = NumpyVectorSpace(range) if isinstance(range, int) else range
+        self.sparse = sparse
+        self.name = name
+
+    def _assemble(self, mu=None):
+        s = self.source.dim
+        r = self.range.dim
+
+        if self.sparse:
+            # return a sparse matrix in csc format
+            return csc_matrix(shape=(r, s))
+        else:
+            # return a dense matrix
+            return np.zeros(shape=(r, s))
+
+
+class TransposedOperator(NumpyMatrixBasedOperator):
+    """Represents the transposed of an MatrixBasedOperator."""
+
+    def __init__(self, operator):
+        self.operator = operator
+        self.source = operator.range
+        self.range = operator.source
+        self.name = '{0}_transposed'.format(operator.name)
+
+    def _assemble(self, mu=None):
+        return self.operator._assemble(mu).T
