@@ -8,18 +8,18 @@ import numpy as np
 from pymor.functions.interfaces import FunctionInterface
 
 
-def P1ShapeFunctions(dim, x):
+def P1ShapeFunctions(dim):
 
     assert isinstance(dim, int)
     assert dim > 0
 
-    assert isinstance(x, np.ndarray)
+    #assert isinstance(x, np.ndarray)
 
     if dim == 1:
-        return lambda X: np.array([
-            1.0 -  X[..., 0],
+        return lambda X: np.array((
+            1.0 - X[..., 0],
             X[..., 0]
-        ])
+        ))
     elif dim == 2:
         return lambda X: np.array([
             1.0 - X[..., 0],
@@ -50,12 +50,12 @@ def P1ShapeFunctionGradients(dim):
         raise NotImplementedError
 
 
-def P2ShapeFunctions(dim, x):
+def P2ShapeFunctions(dim):
 
     assert isinstance(dim, int)
     assert dim > 0
 
-    assert isinstance(x, np.ndarray)
+    #assert isinstance(x, np.ndarray)
 
     if dim == 1:
         return lambda X: np.array([
@@ -76,12 +76,12 @@ def P2ShapeFunctions(dim, x):
         raise NotImplementedError
 
 
-def P2ShapeFunctionGradients(dim, x):
+def P2ShapeFunctionGradients(dim):
 
     assert isinstance(dim, int)
     assert dim > 0
 
-    assert isinstance(x, np.ndarray)
+    #assert isinstance(x, np.ndarray)
 
     if dim == 1:
         return lambda X: np.array([
