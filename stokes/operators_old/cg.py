@@ -966,7 +966,7 @@ class TwoDimensionalL2ProductFunctionalP2(NumpyMatrixBasedOperator):
                     i[DI] = 0
                 del DI
 
-                Is.append(i.reshape((1, -1)))
+            Is.append(i.reshape((1, -1)))
 
         I = np.hstack(Is)
 
