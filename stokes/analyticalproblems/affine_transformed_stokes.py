@@ -19,8 +19,8 @@ class AffineTransformedStokes(StokesProblem):
         assert isinstance(problem, StokesProblem)
         
         # rhs
-        assert len(problem.rhs_functions) == 1
-        assert problem.rhs_functionals is None
+        assert problem.rhs_transformation_functions is None
+        assert problem.rhs_transformation_functionals is None
         
         # diffusion
         assert len(problem.diffusion_functions) == 1
@@ -31,8 +31,8 @@ class AffineTransformedStokes(StokesProblem):
         assert problem.advection_functionals is None
         
         # dirichlet data
-        assert len(problem.dirichlet_data_functions) == 1
-        assert problem.dirichlet_data_functionals is None        
+        assert problem.dirichlet_data_transformation_functions is None
+        assert problem.dirichlet_data_transformation_functionals is None
         
         # diffusion
         def evaluate_diffusion_functional(mu, entry):
@@ -95,8 +95,8 @@ class AffineTransformedStokes(StokesProblem):
 
         self.diffusion_functions = functions
         self.advection_functions = functions
-        self.rhs_functions = functions
-        self.dirichlet_data_functions = functions
+        self.rhs_transformation_functions = functions
+        self.dirichlet_data_transformation_functions = functions
 
         # diffusion
         self.diffusion_functionals = [GenericParameterFunctional(mapping=partial(evaluate_diffusion_functional(),
@@ -135,7 +135,8 @@ class AffineTransformedStokes(StokesProblem):
                                                                  name='Transformation')]
 
         # rhs
-        self.rhs_functionals = [GenericParameterFunctional(mapping=partial(evaluate_rhs_functional(), entry=(0, 0)),
+        self.rhs_transformation_functionals = [GenericParameterFunctional(mapping=partial(evaluate_rhs_functional(),
+                                                                                          entry=(0, 0)),
                                                            parameter_type={'transformation': (2, 2)},
                                                            name='Transformation'),
                                 GenericParameterFunctional(mapping=partial(evaluate_rhs_functional(), entry=(0, 1)),
@@ -149,7 +150,7 @@ class AffineTransformedStokes(StokesProblem):
                                                            name='Transformation')]
 
         # dirichlet data
-        self.dirichlet_data_functionals = [GenericParameterFunctional(mapping=
+        self.dirichlet_data_transformation_functionals = [GenericParameterFunctional(mapping=
                                                                       partial(evaluate_dirichlet_data_functional(),
                                                                               entry=(0, 0)),
                                                                       parameter_type={'transformation': (2, 2)},
@@ -170,3 +171,5 @@ class AffineTransformedStokes(StokesProblem):
                                                                       parameter_type={'transformation': (2, 2)},
                                                                       name='Transformation')]
 
+        self.rhs = problem.rhs
+        self.dirichlet_data = problem.dirichlet_data

@@ -27,14 +27,16 @@ class StokesProblem(EllipticProblem):
 
     def __init__(self,
                  domain = RectDomain(),
-                 rhs_functions = [ConstantFunction(value = np.array([[0.0], [0.0]]), dim_domain=2),],
-                 rhs_functionals = None,
+                 rhs = ConstantFunction(value = np.array([[0.0], [0.0]]), dim_domain=2),
+                 rhs_transformation_functions = None,
+                 rhs_transformation_functionals = None,
                  diffusion_functions = (ConstantFunction(dim_domain=2),),
                  diffusion_functionals = None,
                  advection_functions = None,
                  advection_functionals = None,
-                 dirichlet_data_functions = [ConstantFunction(value = np.array([[0.0], [0.0]]), dim_domain=2),],
-                 dirichlet_data_functionals = None,
+                 dirichlet_data = ConstantFunction(value = np.array([[0.0], [0.0]]), dim_domain=2),
+                 dirichlet_data_transformation_functions = None,
+                 dirichlet_data_transformation_functionals = None,
                  neumann_data = None,
                  viscosity = 1.0,
                  name='StokesProblem'):
@@ -43,14 +45,16 @@ class StokesProblem(EllipticProblem):
             raise NotImplementedError
 
         super(StokesProblem, self).__init__(domain=domain,
+                                            rhs=rhs,
                                             diffusion_functions=diffusion_functions,
                                             diffusion_functionals=diffusion_functionals,
                                             advection_functions=advection_functions,
                                             advection_functionals=advection_functionals,
+                                            dirichlet_data=dirichlet_data,
                                             neumann_data=neumann_data,
                                             name=name)
-        self.rhs_functions = rhs_functions
-        self.rhs_functionals = rhs_functionals
-        self.dirichlet_data_functions = dirichlet_data_functions
-        self.dirichlet_data_functionals = dirichlet_data_functionals
+        self.rhs_transformation_functions = rhs_transformation_functions
+        self.rhs_transformation_functionals = rhs_transformation_functionals
+        self.dirichlet_data_transformation_functions = dirichlet_data_transformation_functions
+        self.dirichlet_data_transformation_functionals = dirichlet_data_transformation_functionals
         self.viscosity = viscosity
