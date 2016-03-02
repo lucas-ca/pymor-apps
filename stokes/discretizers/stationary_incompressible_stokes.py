@@ -79,12 +79,12 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
     if fem_order == 1:
         DiffusionOperator = DiffusionOperatorP1
         AdvectionOperator = AdvectionOperatorP1
-        RelaxationOperator = RelaxationOperatorP1
+        #RelaxationOperator = RelaxationOperatorP1
         Functional = L2VectorProductFunctionalP1
     elif fem_order == 2:
         DiffusionOperator = DiffusionOperatorP2
         AdvectionOperator = AdvectionOperatorP2
-        RelaxationOperator = ZeroOperator
+        #RelaxationOperator = ZeroOperator
         Functional = L2VectorProductFunctionalP2
     else:
         raise NotImplementedError
@@ -187,6 +187,7 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
         elif fem_order == 2:
             C = ZeroOperator(source=NumpyVectorSpace(grid.size(grid.dim)), range=NumpyVectorSpace(grid.size(grid.dim)),
                              sparse=False, name='relaxation')
+        F = Functional()
 
     # build complete stokes operator
     L = None
