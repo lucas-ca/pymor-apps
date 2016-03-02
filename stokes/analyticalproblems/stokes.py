@@ -17,9 +17,9 @@ class StokesProblem(EllipticProblem):
 
     The problem consists in solving ::
 
-    |  -ν ⋅ Δ u(x, μ) + ∇ p(x, μ) = f(x, μ) in Ω
-    |                 ∇ ⋅ u(x, μ) = 0       in Ω
-    |                     u(x, μ) = u_D     on Γ_D
+    |  -ν Δ u(x, μ) + ∇ p(x, μ) = f(x, μ) in Ω
+    |               ∇ ⋅ u(x, μ) = 0       in Ω
+    |                   u(x, μ) = u_D     on Γ_D
 
     for (u, p).
 
@@ -50,7 +50,7 @@ class StokesProblem(EllipticProblem):
                                             neumann_data=neumann_data,
                                             name=name)
         self.rhs_functions = rhs_functions
+        self.rhs_functionals = rhs_functionals
         self.dirichlet_data_functions = dirichlet_data_functions
         self.dirichlet_data_functionals = dirichlet_data_functionals
-        self.rhs_functionals = rhs_functionals
         self.viscosity = viscosity

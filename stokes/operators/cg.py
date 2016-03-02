@@ -311,7 +311,6 @@ class L2ProductP2(NumpyMatrixBasedOperator):
         return csc_matrix(A).copy()
 
 
-
 class AdvectionOperatorP1(NumpyMatrixBasedOperator):
     """An advection operator. P1 shape functions for pressure and velocity nodes. Computes the following integral::
 
@@ -700,6 +699,7 @@ class TransposedOperator(NumpyMatrixBasedOperator):
     """Represents the transposed of an MatrixBasedOperator."""
 
     def __init__(self, operator):
+        assert isinstance(operator, NumpyMatrixBasedOperator)
         self.operator = operator
         self.source = operator.range
         self.range = operator.source
