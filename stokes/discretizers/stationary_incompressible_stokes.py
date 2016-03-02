@@ -19,6 +19,7 @@ from pymor.vectorarrays.numpy import NumpyVectorSpace
 from pymor.operators.cg import DiffusionOperatorP1
 from stokes.operators.cg import DiffusionOperatorP2, AdvectionOperatorP1, AdvectionOperatorP2, RelaxationOperatorP1,\
     TransposedOperator, ZeroOperator, L2VectorProductFunctionalP1, L2VectorProductFunctionalP2
+from stokes.operators.block import StokesLhsBlockOperator, StokesRhsBlockOperator
 
 def discretize_stationary_incompressible_stokes(analytical_problem, diameter=None, domain_discretizer=None,
                            grid=None, boundary_info=None, fem_order=2, plot_type=None, resolution=None, mu=None):
@@ -187,9 +188,14 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
         elif fem_order == 2:
             C = ZeroOperator(source=NumpyVectorSpace(grid.size(grid.dim)), range=NumpyVectorSpace(grid.size(grid.dim)),
                              sparse=False, name='relaxation')
-        F = Functional()
+        F = Functional(grid=grid, rhs=p.rhs, boundary_info=boundary_info, dirchlet_data=p.dirichlet_data,
+                       neumann_data=p.neumann_data, robin_data=p.robin_data, transformation_function=None,
+                       clear_dirichlet_dofs=False, clear_non_dirichlet_dofs=False)
+
+    # zero component on rhs
+    Fz = ZeroOperator(source=NumpyVectorSpace(grid.size(grid.dim)), range=NumpyVectorSpace(1), sparse=False)
 
     # build complete stokes operator
-    L = None
-    R = None
+    L = StokesLhsBlockOperator([A, B, Bt, C])
+    R = StokesRhsBlockOperator([F, Fz])
 
