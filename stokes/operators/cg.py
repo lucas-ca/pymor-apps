@@ -561,6 +561,10 @@ class L2VectorProductFunctionalP1(NumpyMatrixBasedOperator):
         assert transformation_function is None or \
                (transformation_function.dim_domain == grid.dim_outer and \
                    transformation_function.shape_range == (grid.dim_outer,)*2)
+
+        assert (clear_dirichlet_dofs and not clear_non_dirichlet_dofs) or\
+               (not clear_dirichlet_dofs and clear_non_dirichlet_dofs)
+
         self.source = NumpyVectorSpace(2*grid.size(grid.dim))
         self.range = NumpyVectorSpace(1)
 
@@ -638,7 +642,7 @@ class L2VectorProductFunctionalP1(NumpyMatrixBasedOperator):
             # dirichlet nodes
             DN = bi.dirichlet_boundaries(g.dim)
 
-            if self.dirichlet_data is not None:
+            if self.dirichlet_data is not None and not self.clear_dirichlet_dofs:
                 # points to evaluate dirichlet function in
                 DC = g.centers(g.dim)[DN]
 
@@ -674,6 +678,10 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
         assert transformation_function is None or \
                (transformation_function.dim_domain == grid.dim_outer and \
                    transformation_function.shape_range == (grid.dim_outer,)*2)
+
+        assert (clear_dirichlet_dofs and not clear_non_dirichlet_dofs) or\
+               (not clear_dirichlet_dofs and clear_non_dirichlet_dofs)
+
         self.source = NumpyVectorSpace(2*(grid.size(grid.dim) + grid.size(grid.dim)))
         self.range = NumpyVectorSpace(1)
 
@@ -718,7 +726,10 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
             F_0 = np.einsum('ij,ecj->eci', T, F_0)
 
         # calculate integrals for f_i separately
-        F = [F_0[..., i] for i in xrange(g.dim)]
+        if self.clear_non_dirichlet_dofs:
+            F = [0*F_0[..., i] for i in xrange(g.dim)]
+        else:
+            F = [F_0[..., i] for i in xrange(g.dim)]
 
         # calculate products
         SF_INT = [(np.einsum('ec,pc,e,c->ep', F[i], SF, g.integration_elements(0), w).ravel()) for i in xrange(g.dim)]
@@ -761,7 +772,7 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
             DN = np.concatenate((VDN, EDN))
             del VDN, EDN
 
-            if self.dirichlet_data is not None:
+            if self.dirichlet_data is not None and not self.clear_dirichlet_dofs:
                 # points to evaluate dirichlet function in
                 DC = np.concatenate((g.centers(g.dim), g.centers(g.dim - 1)))[DN]
 
