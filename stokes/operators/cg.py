@@ -548,126 +548,127 @@ class RelaxationOperatorP1(NumpyMatrixBasedOperator):
         return A
 
 
-    class L2VectorProductFunctionalP1(NumpyMatrixBasedOperator):
-        """An operator to calculate integral f*v for vector valued functions f. A transformation matrix can be applied.
-        """
+class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
+    """An operator to calculate integral f*v for vector valued functions f with linear shape functions. A transformation
+    matrix can be applied.
+    """
 
-        def __init__(self, grid, function, boundary_info=None, dirichlet_data=None, neumann_data=None, robin_data=None,
-                     order=2, transformation_function=None, clear_dirichlet_dofs=False,
-                     clear_non_dirichlet_dofs = False, name=None):
-            assert grid.reference_element is triangle
-            assert isinstance(function, FunctionInterface)
-            assert transformation_function is None or \
-                   (transformation_function.dim_domain == grid.dim_outer and \
-                       transformation_function.shape_range == (grid.dim_outer,)*2)
-            self.source = NumpyVectorSpace(2*(grid.size(grid.dim) + grid.size(grid.dim)))
-            self.range = NumpyVectorSpace(1)
+    def __init__(self, grid, function, boundary_info=None, dirichlet_data=None, neumann_data=None, robin_data=None,
+                 order=2, transformation_function=None, clear_dirichlet_dofs=False,
+                 clear_non_dirichlet_dofs = False, name=None):
+        assert grid.reference_element is triangle
+        assert isinstance(function, FunctionInterface)
+        assert transformation_function is None or \
+               (transformation_function.dim_domain == grid.dim_outer and \
+                   transformation_function.shape_range == (grid.dim_outer,)*2)
+        self.source = NumpyVectorSpace(2*(grid.size(grid.dim) + grid.size(grid.dim)))
+        self.range = NumpyVectorSpace(1)
 
-            self.grid = grid
-            self.function = function
-            self.boundary_info = boundary_info
-            self.dirichlet_data = dirichlet_data
-            self.neumann_data = neumann_data
-            self.robin_data = robin_data
-            self.order =  order
-            self.transformation_function = transformation_function
-            self.clear_dirichlet_dofs = clear_dirichlet_dofs
-            self.clear_non_dirichlet_dofs = clear_non_dirichlet_dofs
-            self.name = name
+        self.grid = grid
+        self.function = function
+        self.boundary_info = boundary_info
+        self.dirichlet_data = dirichlet_data
+        self.neumann_data = neumann_data
+        self.robin_data = robin_data
+        self.order =  order
+        self.transformation_function = transformation_function
+        self.clear_dirichlet_dofs = clear_dirichlet_dofs
+        self.clear_non_dirichlet_dofs = clear_non_dirichlet_dofs
+        self.name = name
 
-            if neumann_data is not None:
-                raise NotImplementedError
-            if robin_data is not None:
-                raise NotImplementedError
+        if neumann_data is not None:
+            raise NotImplementedError
+        if robin_data is not None:
+            raise NotImplementedError
 
-            if transformation_function is not None:
-                self.build_parameter_type(inherits=(transformation_function,))
+        if transformation_function is not None:
+            self.build_parameter_type(inherits=(transformation_function,))
 
-        def _assemble(self, mu=None):
-            g = self.grid
-            bi = self.boundary_info
+    def _assemble(self, mu=None):
+        g = self.grid
+        bi = self.boundary_info
 
-            # quadrature rule on reference element
-            q, w = g.reference_element.quadrature(order=2)
+        # quadrature rule on reference element
+        q, w = g.reference_element.quadrature(order=2)
 
-            # shape functions on reference element
-            SF = P1ShapeFunctions(g.dim)(q)
-            num_global_sf = g.size(g.dim) + g.size(g.dim - 1)
-            del q
+        # shape functions on reference element
+        SF = P2ShapeFunctions(g.dim)(q)
+        num_global_sf = g.size(g.dim) + g.size(g.dim - 1)
+        del q
 
-            # evaluate function in all quadrature points on domain
-            F_0 = self.function(g.quadrature_points(0, order=self.order), mu=mu)
+        # evaluate function in all quadrature points on domain
+        F_0 = self.function(g.quadrature_points(0, order=self.order), mu=mu)
 
-            if self.transformation_function is not None:
-                # apply piola transformation
-                T = self.transformation_function(g.centers(g.dim), mu=mu)
-                F_0 = np.einsum('ij,ecj->eci', T, F_0)
+        if self.transformation_function is not None:
+            # apply piola transformation
+            T = self.transformation_function(g.centers(g.dim), mu=mu)
+            F_0 = np.einsum('ij,ecj->eci', T, F_0)
 
-            # calculate integrals for f_i separately
-            F = [F_0[..., i] for i in xrange(g.dim)]
+        # calculate integrals for f_i separately
+        F = [F_0[..., i] for i in xrange(g.dim)]
 
-            # calculate products
-            SF_INT = [(np.einsum('ec,pc,e,c->ep', F[i], SF, g.integration_elements(0), w).ravel()) for i in xrange(g.dim)]
-            del w
+        # calculate products
+        SF_INT = [(np.einsum('ec,pc,e,c->ep', F[i], SF, g.integration_elements(0), w).ravel()) for i in xrange(g.dim)]
+        del w
 
-            # determine dofs
-            # vertex nodes
-            VN = g.subentities(0, g.dim)
-            # edge nodes
-            EN = g.subentities(0, g.dim - 1) + g.size(g.dim)
-            # all nodes
-            N = np.concatenate((VN, EN), axis=-1).ravel()
-            del VN, EN
+        # determine dofs
+        # vertex nodes
+        VN = g.subentities(0, g.dim)
+        # edge nodes
+        EN = g.subentities(0, g.dim - 1) + g.size(g.dim)
+        # all nodes
+        N = np.concatenate((VN, EN), axis=-1).ravel()
+        del VN, EN
 
-            SF_I0 = np.zeros_like(N)
-            SF_I1 = N
-            del N
+        SF_I0 = np.zeros_like(N)
+        SF_I1 = N
+        del N
 
-            # build global vector
-            I = [np.array(coo_matrix((SF_INT[i], (SF_I0, SF_I1)), shape=(1, num_global_sf)).todense()).ravel()
-                 for i in xrange(g.dim)]
-            del SF_INT, SF_I0, SF_I1
+        # build global vector
+        I = [np.array(coo_matrix((SF_INT[i], (SF_I0, SF_I1)), shape=(1, num_global_sf)).todense()).ravel()
+             for i in xrange(g.dim)]
+        del SF_INT, SF_I0, SF_I1
 
-            # boundary treatment
-            # neumann
-            if bi is not None and bi.has_neumann:
-                raise NotImplementedError
+        # boundary treatment
+        # neumann
+        if bi is not None and bi.has_neumann:
+            raise NotImplementedError
 
-            # robin
-            if bi is not None and bi.has_robin:
-                raise NotImplementedError
+        # robin
+        if bi is not None and bi.has_robin:
+            raise NotImplementedError
 
-            # dirichlet
-            if bi is not None and bi.has_dirichlet:
-                # vertex dirchlet nodes
-                VDN = bi.dirichlet_boundaries(g.dim)
-                # edge dirichlet nodes
-                EDN = bi.dirichlet_boundaries(g.dim - 1) + g.size(g.dim)
-                # dirichlet nodes
-                DN = np.concatenate((VDN, EDN))
-                del VDN, EDN
+        # dirichlet
+        if bi is not None and bi.has_dirichlet:
+            # vertex dirchlet nodes
+            VDN = bi.dirichlet_boundaries(g.dim)
+            # edge dirichlet nodes
+            EDN = bi.dirichlet_boundaries(g.dim - 1) + g.size(g.dim)
+            # dirichlet nodes
+            DN = np.concatenate((VDN, EDN))
+            del VDN, EDN
 
-                if self.dirichlet_data is not None:
-                    # points to evaluate dirichlet function in
-                    DC = np.concatenate((g.centers(g.dim), g.centers(g.dim - 1)))[DN]
+            if self.dirichlet_data is not None:
+                # points to evaluate dirichlet function in
+                DC = np.concatenate((g.centers(g.dim), g.centers(g.dim - 1)))[DN]
 
-                    # evaluate dirichlet function
-                    D = self.dirichlet_data(DC, mu=mu)
+                # evaluate dirichlet function
+                D = self.dirichlet_data(DC, mu=mu)
 
-                    if self.transformation_function is not None:
-                        # apply piola transformation
-                        T = self.transformation_function(DC, mu=mu)
-                        D = np.einsum('eij,ej->ei', T, D)
-                    for i in xrange(g.dim):
-                        I[i][DC] = D[..., i]
-                else:
-                    for i in xrange(g.dim):
-                        I[i][DN] = 0
-                del DN
+                if self.transformation_function is not None:
+                    # apply piola transformation
+                    T = self.transformation_function(DC, mu=mu)
+                    D = np.einsum('eij,ej->ei', T, D)
+                for i in xrange(g.dim):
+                    I[i][DC] = D[..., i]
+            else:
+                for i in xrange(g.dim):
+                    I[i][DN] = 0
+            del DN
 
-            I = np.hstack([I[i].reshape((1, -1))])
+        I = np.hstack([I[i].reshape((1, -1))])
 
-            return I
+        return I
 
 
 class ZeroOperator(NumpyMatrixBasedOperator):
