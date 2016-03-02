@@ -11,7 +11,7 @@ import numpy as np
 from scipy.sparse import bmat
 from scipy.sparse.linalg import spsolve
 
-from matplotlib import pyplot as plt
+from matplotlib_test import pyplot as plt
 
 from pymor.domaindiscretizers.default import discretize_domain_default
 from pymor.functions.basic import ConstantFunction
@@ -252,7 +252,7 @@ def plot_uv_fem_red_ref(grid, mu, u_ref, v_ref, u_fem, v_fem, u_red, v_red):
     plt.title('FEM')
     plt.quiver(x_t, y_t, u_fem, v_fem, color='r')
     plt.subplot2grid(grid_size, (0, 2), rowspan=1, colspan=1)
-    plt.title('FEM reduced')
+    plt.title('reduced')
     plt.quiver(x_t, y_t, u_red, v_red)#, pivot='mid', color='r')
     #plt.tight_layout()
     plt.show()
@@ -281,8 +281,9 @@ def main():
     mu_test = rotate(135)  # rotate 135
     mu_test = rotate(180)  # rotate 180
     mu_test = rotate(22.5)  # rotate 225
-    mu_test = rotate(270)  # rotate 270
+    #mu_test = rotate(270)  # rotate 270
     mu_test = np.array([[1, 1], [0, 1]])  # rotate 315
+    #mu_test = 2*np.eye(2)
     
     train_set = [np.eye(2), rotate(45), rotate(90), rotate(135), rotate(180), rotate(225), rotate(270), rotate(315)]
     
@@ -301,7 +302,11 @@ def main():
     # plot
     plot_uv_fem_red_ref(grid, mu_test, u_ref, v_ref, u_fem[0:num_p1], v_fem[0:num_p1], u_red, v_red)
 
-    print(u_fem[0:num_p1]/u_red)
+    #äA = DiffusionOperatorP2(grid, EmptyBoundaryInfo(grid))._assemble()
+
+    #err_h1 = (u_ref - u_red).dot(A.dot((u_ref - u_red)))
+
+    print(u_ref - u_red)
     
     
 if __name__ == '__main__':
