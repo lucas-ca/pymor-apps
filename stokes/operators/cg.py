@@ -608,8 +608,10 @@ class L2VectorProductFunctionalP1(NumpyMatrixBasedOperator):
             T = self.transformation_function(g.centers(g.dim), mu=mu)
             F_0 = np.einsum('ij,ecj->eci', T, F_0)
 
-        # calculate integrals for f_i separately
-        F = [F_0[..., i] for i in xrange(g.dim)]
+        if self.clear_non_dirichlet_dofs:
+            F = [0*F_0[..., i] for i in xrange(g.dim)]
+        else:
+            F = [F_0[..., i] for i in xrange(g.dim)]
 
         # calculate products
         SF_INT = [(np.einsum('ec,pc,e,c->ep', F[i], SF, g.integration_elements(0), w).ravel()) for i in xrange(g.dim)]
