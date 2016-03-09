@@ -75,6 +75,7 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
         else:
             grid, boundary_info = domain_discretizer(analytical_problem.domain, diameter=diameter)
 
+    empty_boundary_info = EmptyBoundaryInfo(grid)
     # triangle grid
     assert grid.reference_element in (triangle,)
 
@@ -124,7 +125,7 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
                     # boundary part
                     # ---
                     # non boundary part
-                    Bti = [AdvectionOperator(grid, boundary_info, advection_function=af, dirichlet_clear_rows=False,
+                    Bti = [AdvectionOperator(grid, empty_boundary_info, advection_function=af, dirichlet_clear_rows=False,
                                             name='advection_{0}'.format(i))
                           for i, af in enumerate(p.advection_functions)]
                     Bt = TransposedOperator(LincombOperator(operators=Bti, coefficients=list(p.advection_functionals)),
@@ -178,19 +179,19 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
         else:
             raise ValueError
     else:
-        assert len(p.diffusion_functions == 1)
+        assert len(p.diffusion_functions) == 1
         A = DiffusionOperator(grid=grid, boundary_info=boundary_info, diffusion_function=p.diffusion_functions[0],
                               diffusion_constant=p.viscosity, dirichlet_clear_diag=False, name='diffusion')
         B = LincombOperator(operators=[AdvectionOperator(grid=grid, boundary_info=boundary_info, advection_function=None,
                               dirichlet_clear_rows=True, name='advection')], coefficients=[-1.0], name='advection')
-        Bt = TransposedOperator(AdvectionOperator(grid=grid, boundary_info=boundary_info, advection_function=None,
+        Bt = TransposedOperator(AdvectionOperator(grid=grid, boundary_info=empty_boundary_info, advection_function=None,
                               dirichlet_clear_rows=False, name='advection'))
         if fem_order == 1:
             C = RelaxationOperatorP1(grid=grid, name='relaxation')
         elif fem_order == 2:
             C = ZeroOperator(source=NumpyVectorSpace(grid.size(grid.dim)), range=NumpyVectorSpace(grid.size(grid.dim)),
                              sparse=False, name='relaxation')
-        F1 = Functional(grid=grid, rhs=p.rhs, boundary_info=boundary_info, dirchlet_data=p.dirichlet_data,
+        F1 = Functional(grid=grid, function=p.rhs, boundary_info=boundary_info, dirichlet_data=p.dirichlet_data,
                        neumann_data=p.neumann_data, robin_data=p.robin_data, transformation_function=None,
                        clear_dirichlet_dofs=False, clear_non_dirichlet_dofs=False)
 

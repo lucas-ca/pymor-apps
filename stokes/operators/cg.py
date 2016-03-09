@@ -59,7 +59,10 @@ class DiffusionOperatorP2(NumpyMatrixBasedOperator):
                 diffusion_function.dim_domain == grid.dim_outer and
                 diffusion_function.shape_range == tuple() or
                 diffusion_function.shape_range == (grid.dim_outer,)*2)
+
         self.source = NumpyVectorSpace(grid.size(grid.dim) + grid.size(grid.dim - 1))
+        self.range = NumpyVectorSpace(grid.size(grid.dim) + grid.size(grid.dim - 1))
+
         self.grid = grid
         self.boundary_info = boundary_info
         self.diffusion_constant = diffusion_constant
@@ -79,9 +82,9 @@ class DiffusionOperatorP2(NumpyMatrixBasedOperator):
         q, w = g.reference_element.quadrature(order=2)
 
         # gradients of shape functions
-        SF_GRAD = P2ShapeFunctionGradients(g.dim)
+        SF_GRAD = P2ShapeFunctionGradients(g.dim)(q)
         # TODO: check number of local shape functions
-        num_local_sf = SF_GRAD.shape[-2]
+        num_local_sf = SF_GRAD.shape[0]
         num_global_sf = g.size(g.dim) + g.size(g.dim - 1)
 
         # calculate gradients of shape functions transformed by reference map
@@ -109,9 +112,9 @@ class DiffusionOperatorP2(NumpyMatrixBasedOperator):
 
         # determine global dofs
         # vertex nodes
-        VN = self.subentities(0, g.dim)
+        VN = g.subentities(0, g.dim)
         # edge nodes
-        EN = self.subentities(0, g.dim - 1) + g.size(g.dim)
+        EN = g.subentities(0, g.dim - 1) + g.size(g.dim)
         # all nodes
         N = np.concatenate((VN, EN), axis=-1)
         del VN, EN
@@ -134,7 +137,7 @@ class DiffusionOperatorP2(NumpyMatrixBasedOperator):
                 # vertex dirichlet mask
                 VDM = bi.dirichlet_mask(g.dim)
                 # edge dirichlet mask
-                EDM = bi.dirichlet_mask(g.dim - 1) + g.size(g.dim)
+                EDM = bi.dirichlet_mask(g.dim - 1)# + g.size(g.dim)
                 # dirichlet mask
                 DM = np.concatenate((VDM, EDM), axis=-1)
                 del VDM, EDM
@@ -464,7 +467,7 @@ class AdvectionOperatorP2(NumpyMatrixBasedOperator):
             A = self.advection_function(self.grid.centers(0), mu=mu)
             INT = np.einsum('pq,eviq,e,q,eji->evpj', PSF, VSF_GRADS, g.integration_elements(0), w, A)
         else:
-            INT = np.einsum('pq,eviq,e,q->evpi', PSF, VSF_GRADS, g.intergration_elements(0), w)
+            INT = np.einsum('pq,eviq,e,q->evpi', PSF, VSF_GRADS, g.integration_elements(0), w)
         del PSF, VSF_GRADS, w
 
         INTS = [INT[..., i].ravel() for i in xrange(g.dim)]
@@ -489,13 +492,13 @@ class AdvectionOperatorP2(NumpyMatrixBasedOperator):
                 INTS = [np.where(DM[SF_I0], 0, INTS[i]) for i in xrange(g.dim)]
 
         # build global system matrix
-            B = [coo_matrix((INTS[i], (SF_I0, SF_I1)), shape=(num_global_vsf, num_global_psf)) for i in xrange(g.dim)]
-            del SF_I0, SF_I1, INTS
+        B = [coo_matrix((INTS[i], (SF_I0, SF_I1)), shape=(num_global_vsf, num_global_psf)) for i in xrange(g.dim)]
+        del SF_I0, SF_I1, INTS
 
-            # convert to csc matrix
-            B = vstack([csc_matrix(B[i].copy()) for i in xrange(g.dim)])
+        # convert to csc matrix
+        B = vstack([csc_matrix(B[i].copy()) for i in xrange(g.dim)])
 
-            return B
+        return B
 
 
 class RelaxationOperatorP1(NumpyMatrixBasedOperator):
@@ -656,7 +659,7 @@ class L2VectorProductFunctionalP1(NumpyMatrixBasedOperator):
                     T = self.transformation_function(DC, mu=mu)
                     D = np.einsum('eij,ej->ei', T, D)
                 for i in xrange(g.dim):
-                    I[i][DC] = D[..., i]
+                    I[i][DN] = D[..., i]
             else:
                 for i in xrange(g.dim):
                     I[i][DN] = 0
@@ -681,10 +684,10 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
                (transformation_function.dim_domain == grid.dim_outer and \
                    transformation_function.shape_range == (grid.dim_outer,)*2)
 
-        assert (clear_dirichlet_dofs and not clear_non_dirichlet_dofs) or\
-               (not clear_dirichlet_dofs and clear_non_dirichlet_dofs)
+        #assert (clear_dirichlet_dofs and not clear_non_dirichlet_dofs) or\
+        #       (not clear_dirichlet_dofs and clear_non_dirichlet_dofs)
 
-        self.source = NumpyVectorSpace(2*(grid.size(grid.dim) + grid.size(grid.dim)))
+        self.source = NumpyVectorSpace(2*(grid.size(grid.dim) + grid.size(grid.dim - 1)))
         self.range = NumpyVectorSpace(1)
 
         self.grid = grid
@@ -786,13 +789,14 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
                     T = self.transformation_function(DC, mu=mu)
                     D = np.einsum('eij,ej->ei', T, D)
                 for i in xrange(g.dim):
-                    I[i][DC] = D[..., i]
+                    I[i][DN] = D[..., i]
             else:
                 for i in xrange(g.dim):
                     I[i][DN] = 0
             del DN
 
-        I = np.hstack([I[i].reshape((1, -1))])
+        I0 = [I[i].reshape((1, -1)) for i in xrange(g.dim)]
+        I = np.hstack(I0)
 
         return I
 
