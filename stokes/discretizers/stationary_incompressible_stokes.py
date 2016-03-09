@@ -15,11 +15,13 @@ from pymor.operators.constructions import LincombOperator
 from pymor.vectorarrays.numpy import NumpyVectorSpace
 
 # operators
-
 from pymor.operators.cg import DiffusionOperatorP1
 from stokes.operators.cg import DiffusionOperatorP2, AdvectionOperatorP1, AdvectionOperatorP2, RelaxationOperatorP1,\
     TransposedOperator, ZeroOperator, L2VectorProductFunctionalP1, L2VectorProductFunctionalP2
 from stokes.operators.block import StokesLhsBlockOperator, StokesRhsBlockOperator
+
+# visualizer
+from stokes.gui.stokes_visualizer import StokesVisualizer
 
 def discretize_stationary_incompressible_stokes(analytical_problem, diameter=None, domain_discretizer=None,
                            grid=None, boundary_info=None, fem_order=2, plot_type=None, resolution=None, mu=None):
@@ -166,7 +168,7 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
                                      clear_non_dirichlet_dofs=False,
                                      name='Function_{0}'.format(i))
                           for i, tf in enumerate(p.rhs_transformation_functions)]
-                    F = LincombOperator(operators=Fi0 + Fi,
+                    Fr = LincombOperator(operators=Fi0 + Fi,
                                         coefficients=list(p.dirichlet_data_transformation_functionals) +
                                                      list(p.rhs_transformation_functionals))
                 else:
@@ -188,7 +190,7 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
         elif fem_order == 2:
             C = ZeroOperator(source=NumpyVectorSpace(grid.size(grid.dim)), range=NumpyVectorSpace(grid.size(grid.dim)),
                              sparse=False, name='relaxation')
-        F = Functional(grid=grid, rhs=p.rhs, boundary_info=boundary_info, dirchlet_data=p.dirichlet_data,
+        Fr = Functional(grid=grid, rhs=p.rhs, boundary_info=boundary_info, dirchlet_data=p.dirichlet_data,
                        neumann_data=p.neumann_data, robin_data=p.robin_data, transformation_function=None,
                        clear_dirichlet_dofs=False, clear_non_dirichlet_dofs=False)
 
@@ -197,5 +199,8 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
 
     # build complete stokes operator
     L = StokesLhsBlockOperator([A, B, Bt, C])
-    R = StokesRhsBlockOperator([F, Fz])
+    F = StokesRhsBlockOperator([Fr, Fz])
+
+    visualizer = StokesVisualizer(grid=grid, bounding_box=grid.bounding_box(), codim=2, plot_type=plot_type,
+                                  resolution=resolution, mu=mu)
 
