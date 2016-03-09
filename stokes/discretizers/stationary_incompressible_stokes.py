@@ -168,7 +168,7 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
                                      clear_non_dirichlet_dofs=False,
                                      name='Function_{0}'.format(i))
                           for i, tf in enumerate(p.rhs_transformation_functions)]
-                    Fr = LincombOperator(operators=Fi0 + Fi,
+                    F1 = LincombOperator(operators=Fi0 + Fi,
                                         coefficients=list(p.dirichlet_data_transformation_functionals) +
                                                      list(p.rhs_transformation_functionals))
                 else:
@@ -190,7 +190,7 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
         elif fem_order == 2:
             C = ZeroOperator(source=NumpyVectorSpace(grid.size(grid.dim)), range=NumpyVectorSpace(grid.size(grid.dim)),
                              sparse=False, name='relaxation')
-        Fr = Functional(grid=grid, rhs=p.rhs, boundary_info=boundary_info, dirchlet_data=p.dirichlet_data,
+        F1 = Functional(grid=grid, rhs=p.rhs, boundary_info=boundary_info, dirchlet_data=p.dirichlet_data,
                        neumann_data=p.neumann_data, robin_data=p.robin_data, transformation_function=None,
                        clear_dirichlet_dofs=False, clear_non_dirichlet_dofs=False)
 
@@ -199,8 +199,16 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
 
     # build complete stokes operator
     L = StokesLhsBlockOperator([A, B, Bt, C])
-    F = StokesRhsBlockOperator([Fr, Fz])
+    F = StokesRhsBlockOperator([F1, Fz])
 
     visualizer = StokesVisualizer(grid=grid, bounding_box=grid.bounding_box(), codim=2, plot_type=plot_type,
                                   resolution=resolution, mu=mu)
 
+    products = None
+
+    parameter_space = p.parameter_space if hasattr(p, 'parameter_space') else None
+
+    discretization = StationaryDiscretization(L, F, products=products, visualizer=visualizer,
+                                              parameter_space=parameter_space, name='{}_CG'.format(p.name))
+
+    return discretization, {'grid': grid, 'boundary_info': boundary_info}
