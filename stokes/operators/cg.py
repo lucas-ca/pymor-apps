@@ -724,17 +724,18 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
 
         # evaluate function in all quadrature points on domain
         F_0 = self.function(g.quadrature_points(0, order=self.order), mu=mu)
+        F_1 = self.function(g.quadrature_points(0, order=self.order), mu=mu)
 
         if self.transformation_function is not None:
             # apply piola transformation
-            T = self.transformation_function(g.centers(g.dim), mu=mu)
-            F_0 = np.einsum('ij,ecj->eci', T, F_0)
+            T = self.transformation_function(g.quadrature_points(0, order=self.order), mu=mu)
+            F_1 = np.einsum('ecij,ecj->eci', T, F_0)
 
         # calculate integrals for f_i separately
         if self.clear_non_dirichlet_dofs:
-            F = [0*F_0[..., i] for i in xrange(g.dim)]
+            F = [0.*F_1[..., i] for i in xrange(g.dim)]
         else:
-            F = [F_0[..., i] for i in xrange(g.dim)]
+            F = [F_1[..., i] for i in xrange(g.dim)]
 
         # calculate products
         SF_INT = [(np.einsum('ec,pc,e,c->ep', F[i], SF, g.integration_elements(0), w).ravel()) for i in xrange(g.dim)]
@@ -830,11 +831,12 @@ class TransposedOperator(NumpyMatrixBasedOperator):
     """Represents the transposed of an MatrixBasedOperator."""
 
     def __init__(self, operator):
-        assert isinstance(operator, NumpyMatrixBasedOperator)
+        #assert isinstance(operator, NumpyMatrixBasedOperator)
         self.operator = operator
         self.source = operator.range
         self.range = operator.source
         self.name = '{0}_transposed'.format(operator.name)
+        self.build_parameter_type(inherits=(operator,))
 
     def _assemble(self, mu=None):
-        return self.operator._assemble(mu).T
+        return self.operator.assemble(mu)._matrix.T

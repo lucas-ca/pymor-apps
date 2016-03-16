@@ -51,7 +51,9 @@ class StokesRhsBlockOperator(NumpyMatrixBasedOperator):
         s = blocks[0].source.dim + blocks[1].source.dim
         self.source = NumpyVectorSpace(s)
         self.range=NumpyVectorSpace(1)
+        self.build_parameter_type(inherits=blocks)
 
     def _assemble(self, mu=None):
-        return np.hstack((self.blocks[0]._assemble(mu), self.blocks[1]._assemble(mu)))
+        #return np.hstack((self.blocks[0]._assemble(mu), self.blocks[1]._assemble(mu)))
+        return np.hstack((self.blocks[0].assemble(mu)._matrix, self.blocks[1].assemble(mu)._matrix))
 

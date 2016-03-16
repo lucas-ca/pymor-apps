@@ -128,8 +128,8 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
                     Bti = [AdvectionOperator(grid, empty_boundary_info, advection_function=af, dirichlet_clear_rows=False,
                                             name='advection_{0}'.format(i))
                           for i, af in enumerate(p.advection_functions)]
-                    Bt = TransposedOperator(LincombOperator(operators=Bti, coefficients=list(p.advection_functionals)),
-                                            name='advection')
+                    Bt = TransposedOperator(LincombOperator(operators=Bti, coefficients=list(p.advection_functionals),
+                                                            name='advection'))
 
                     # relaxation part
                     if fem_order == 1:
