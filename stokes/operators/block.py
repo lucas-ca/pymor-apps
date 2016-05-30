@@ -16,17 +16,18 @@ from pymor.vectorarrays.numpy import NumpyVectorSpace
 
 class StokesLhsBlockOperator(NumpyMatrixBasedOperator):
     """Represents the following Stokes Operator:
-        A 0 B
-        0 A B
-        B B C
+        A  B1
+        B2 C
     """
 
     def __init__(self, blocks):
         assert isinstance(blocks, (tuple, list))
         assert len(blocks) == 4, "blocks must be of the form [A, B, Bt, C]"
         self.blocks = blocks  # [A, B, Bt, C]
-        s = 2*blocks[0].source.dim + blocks[1].source.dim
-        r = 2*blocks[0].range.dim + blocks[2].range.dim
+        #s = 2*blocks[0].source.dim + blocks[1].source.dim
+        #r = 2*blocks[0].range.dim + blocks[2].range.dim
+        s = blocks[0].source.dim + blocks[1].source.dim
+        r = blocks[0].range.dim + blocks[2].range.dim
         self.source = NumpyVectorSpace(s)
         self.range = NumpyVectorSpace(r)
         self.build_parameter_type(inherits=blocks)
@@ -34,8 +35,14 @@ class StokesLhsBlockOperator(NumpyMatrixBasedOperator):
     def _assemble(self, mu=None):
         b = self.blocks
 
-        A = bmat([[b[0].assemble(mu)._matrix, None],[None, b[0].assemble(mu)._matrix]])
-        return bmat([[A, b[1].assemble(mu)._matrix], [b[2].assemble(mu)._matrix, b[3].assemble(mu)._matrix]])
+        # reduced case with dense matrices
+        if type(b[0].assemble(mu)._matrix) == np.ndarray:
+            return np.bmat([[b[0].assemble(mu)._matrix, b[1].assemble(mu)._matrix],
+                            [b[2].assemble(mu)._matrix, b[3].assemble(mu)._matrix]])
+        # sparse case
+        else:
+            return bmat([[b[0].assemble(mu)._matrix, b[1].assemble(mu)._matrix],
+                         [b[2].assemble(mu)._matrix, b[3].assemble(mu)._matrix]])
 
 
 class StokesRhsBlockOperator(NumpyMatrixBasedOperator):
@@ -50,10 +57,41 @@ class StokesRhsBlockOperator(NumpyMatrixBasedOperator):
         self.blocks = blocks
         s = blocks[0].source.dim + blocks[1].source.dim
         self.source = NumpyVectorSpace(s)
-        self.range=NumpyVectorSpace(1)
+        self.range = NumpyVectorSpace(1)
         self.build_parameter_type(inherits=blocks)
 
     def _assemble(self, mu=None):
-        #return np.hstack((self.blocks[0]._assemble(mu), self.blocks[1]._assemble(mu)))
+        # return np.hstack((self.blocks[0]._assemble(mu), self.blocks[1]._assemble(mu)))
+        f1 = self.blocks[0].assemble(mu)._matrix
+        f2 = self.blocks[1].assemble(mu)._matrix
+
         return np.hstack((self.blocks[0].assemble(mu)._matrix, self.blocks[1].assemble(mu)._matrix))
+
+
+class DiagonalBlockOperator(NumpyMatrixBasedOperator):
+    """Represents a diagonal block operator:
+        O_0  0   0
+         0  O_1  0
+         0   0  O_2
+    """
+
+    def __init__(self, blocks):
+        assert isinstance(blocks, (tuple, list))
+        self.blocks = blocks  # [A, B, Bt, C]
+        #s = 2*blocks[0].source.dim + blocks[1].source.dim
+        #r = 2*blocks[0].range.dim + blocks[2].range.dim
+        s = sum([op.source.dim for op in blocks])
+        r = sum([op.range.dim for op in blocks])
+        self.source = NumpyVectorSpace(s)
+        self.range = NumpyVectorSpace(r)
+        self.build_parameter_type(inherits=blocks)
+
+    def _assemble(self, mu=None):
+        b = self.blocks
+
+        if len(b) != 2:
+            raise NotImplemented
+        A = bmat([[b[0].assemble(mu)._matrix, None], [None, b[0].assemble(mu)._matrix]])
+
+        return A
 

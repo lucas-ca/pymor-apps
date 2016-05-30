@@ -237,7 +237,7 @@ def evaluate_exact_solution(problem_number, grid):
     
     return u, v, p
 
-def plot_uv_fem_red_ref(grid, mu, u_ref, v_ref, u_fem, v_fem, u_redit, v_red):
+def plot_uv_fem_red_ref(grid, mu, u_ref, v_ref, u_fem, v_fem, u_red, v_red):
     
     g_t = AffineTransformedGrid(grid, mu)
     x_t = g_t.centers(2)[..., 0]
@@ -260,15 +260,12 @@ def plot_uv_fem_red_ref(grid, mu, u_ref, v_ref, u_fem, v_fem, u_redit, v_red):
     plt.quiver(x_t, y_t, u_fem, v_fem, color='r')
     plt.subplot2grid(grid_size, (0, 2), rowspan=1, colspan=1)
     plt.title('reduced')
-    plt.quiver(x_t, y_t, u_redit, v_red)#, pivot='mid', color='r')
+    plt.quiver(x_t, y_t, u_red, v_red)#, pivot='mid', color='r')
     #plt.tight_layout()
     plt.show()
-    plt.figure('red {}'.format(np.allclose(u_redit, 0)))
-    plt.tripcolor(x_t, y_t, g_t.subentities(0, 2), u_redit)
-    plt.colorbar()
 
 def main():
-    DIAMETER = 1./10
+    DIAMETER = 1./20
     FEM_ORDER = 2
     
     PROBLEM = 1
@@ -286,16 +283,16 @@ def main():
     num_p2 = grid.size(grid.dim) + grid.size(grid.dim - 1)
     
     mu_test = np.eye(2)  # id
-    #mu_test = rotate(45)   # rotate 45
-    #mu_test = rotate(90)   # rotate 90
-    #mu_test = rotate(135)  # rotate 135
-    #mu_test = rotate(180)  # rotate 180
-    #mu_test = rotate(22.5)  # rotate 225
+    mu_test = rotate(45)   # rotate 45
+    mu_test = rotate(90)   # rotate 90
+    mu_test = rotate(135)  # rotate 135
+    mu_test = rotate(180)  # rotate 180
+    mu_test = rotate(22.5)  # rotate 225
     #mu_test = rotate(270)  # rotate 270
-    #mu_test = np.array([[1, 0], [0, 1]])  # rotate 315
+    mu_test = np.array([[0, -1], [1, 0]])  # rotate 315
     #mu_test = 2*np.eye(2)
     
-    train_set = [np.eye(2), 2*np.eye(2)]#, rotate(45), rotate(90), rotate(135), rotate(180), rotate(225), rotate(270), rotate(315)]
+    train_set = [np.eye(2), rotate(45), rotate(90), rotate(135), rotate(180), rotate(225), rotate(270), rotate(315)]
     
     # compute rb
     us, ps, _ = compute_rb(train_set, problem, grid, boundary_info, FEM_ORDER)

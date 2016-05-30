@@ -5,15 +5,11 @@
 
 import numpy as np
 
-from pymor.functions.interfaces import FunctionInterface
-
 
 def P1ShapeFunctions(dim):
 
     assert isinstance(dim, int)
     assert dim > 0
-
-    #assert isinstance(x, np.ndarray)
 
     if dim == 1:
         return lambda X: np.array((
@@ -54,8 +50,6 @@ def P2ShapeFunctions(dim):
 
     assert isinstance(dim, int)
     assert dim > 0
-
-    #assert isinstance(x, np.ndarray)
 
     if dim == 1:
         return lambda X: np.array([

@@ -21,7 +21,7 @@ from pymor.operators.cg import DiffusionOperatorP1
 from stokes.grids.affine_transformed_tria import AffineTransformedTriaGrid
 from stokes.operators.cg import DiffusionOperatorP2, AdvectionOperatorP1, AdvectionOperatorP2, RelaxationOperatorP1,\
     TransposedOperator, ZeroOperator, L2VectorProductFunctionalP1, L2VectorProductFunctionalP2
-from stokes.operators.block import StokesLhsBlockOperator, StokesRhsBlockOperator, DiagonalBlockOperator
+from stokes.operators.block import StokesLhsBlockOperator, StokesRhsBlockOperator
 
 # visualizer
 from stokes.gui.stokes_visualizer import StokesVisualizer
@@ -153,18 +153,27 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
 
                     # functional
                     # boundary part
-                    Fi0 = [Functional(grid=grid,
-                                      function=p.rhs,
-                                      boundary_info=boundary_info,
-                                      dirichlet_data=p.dirichlet_data,
-                                      neumann_data=p.neumann_data,
-                                      robin_data=p.robin_data,
-                                      transformation_function=None,
-                                      dirichlet_transformation=tf,
-                                      clear_dirichlet_dofs=False,
-                                      clear_non_dirichlet_dofs=True,
-                                      name='Function_boundary_part_{0}'.format(i))
-                           for i, tf in enumerate(p.dirichlet_data_functions)]
+                    #Fi0 = [Functional(grid=grid,
+                    #                  function=p.rhs,
+                    #                  boundary_info=boundary_info,
+                    #                  dirichlet_data=p.dirichlet_data,
+                    #                  neumann_data=p.neumann_data,
+                    #                  robin_data=p.robin_data,
+                    #                  transformation_function=tf,
+                    #                  clear_dirichlet_dofs=False,
+                    #                  clear_non_dirichlet_dofs=True,
+                    #                  name='Function_boundary_part_{0}'.format(i))
+                    #       for i, tf in enumerate(p.dirichlet_data_functions)]
+                    Fi0 = Functional(grid=grid,
+                                     function=p.rhs,
+                                     boundary_info=boundary_info,
+                                     dirichlet_data=p.dirichlet_data,
+                                     neumann_data=p.neumann_data,
+                                     robin_data=p.robin_data,
+                                     transformation_function=None,
+                                     clear_dirichlet_dofs=False,
+                                     clear_non_dirichlet_dofs=True,
+                                     name='Function_boundary_part')
                     # non boundary part
                     Fi = [Functional(grid=grid,
                                      function=p.rhs,
@@ -173,13 +182,12 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
                                      neumann_data=p.neumann_data,
                                      robin_data=p.robin_data,
                                      transformation_function=tf,
-                                     dirichlet_transformation=None,
                                      clear_dirichlet_dofs=True,
                                      clear_non_dirichlet_dofs=False,
                                      name='Function_{0}'.format(i))
                           for i, tf in enumerate(p.rhs_functions)]
-                    F1 = LincombOperator(operators=Fi0 + Fi,
-                                         coefficients=list(p.dirichlet_data_functionals) + list(p.rhs_functionals))
+                    F1 = LincombOperator(operators=[Fi0] + Fi,
+                                         coefficients=[1.0] + list(p.rhs_functionals))
                 else:
                     raise ValueError
             else:
@@ -200,15 +208,14 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
             C = ZeroOperator(source=NumpyVectorSpace(grid.size(grid.dim)), range=NumpyVectorSpace(grid.size(grid.dim)),
                              sparse=False, name='relaxation')
         F1 = Functional(grid=grid, function=p.rhs, boundary_info=boundary_info, dirichlet_data=p.dirichlet_data,
-                       neumann_data=p.neumann_data, robin_data=p.robin_data, transformation_function=None,
-                       clear_dirichlet_dofs=False, clear_non_dirichlet_dofs=False)
+                        neumann_data=p.neumann_data, robin_data=p.robin_data, transformation_function=None,
+                        clear_dirichlet_dofs=False, clear_non_dirichlet_dofs=False)
 
     # zero component on rhs
     Fz = ZeroOperator(source=NumpyVectorSpace(grid.size(grid.dim)), range=NumpyVectorSpace(1), sparse=False)
 
     # build complete stokes operator
-    A2 = DiagonalBlockOperator([A, A])
-    L = StokesLhsBlockOperator([A2, B, Bt, C])
+    L = StokesLhsBlockOperator([A, B, Bt, C])
     F = StokesRhsBlockOperator([F1, Fz])
 
     # save

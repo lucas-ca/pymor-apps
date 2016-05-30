@@ -52,13 +52,14 @@ class DiffusionOperatorP2(NumpyMatrixBasedOperator):
 
     def __init__(self, grid, boundary_info, diffusion_function=None, diffusion_constant=None,
                  dirichlet_clear_columns=False, dirichlet_clear_diag=False, solver_options=None,
-                 name=None):
+                 name=None, direct=False):
         assert grid.reference_element(0) in {triangle, line}
-        assert diffusion_function is None \
-            or (isinstance(diffusion_function, FunctionInterface) and
-                diffusion_function.dim_domain == grid.dim_outer and
-                diffusion_function.shape_range == tuple() or
-                diffusion_function.shape_range == (grid.dim_outer,)*2)
+        if direct == False:
+            assert diffusion_function is None \
+                   or (isinstance(diffusion_function, FunctionInterface) and
+                       diffusion_function.dim_domain == grid.dim_outer and
+                       diffusion_function.shape_range == tuple() or
+                       diffusion_function.shape_range == (grid.dim_outer,)*2)
 
         self.source = NumpyVectorSpace(grid.size(grid.dim) + grid.size(grid.dim - 1))
         self.range = NumpyVectorSpace(grid.size(grid.dim) + grid.size(grid.dim - 1))
@@ -71,7 +72,7 @@ class DiffusionOperatorP2(NumpyMatrixBasedOperator):
         self.dirichlet_clear_diag = dirichlet_clear_diag
         self.solver_options = solver_options
         self.name = name
-        if diffusion_function is not None:
+        if diffusion_function is not None and not direct:
             self.build_parameter_type(inherits=(diffusion_function,))
 
     def _assemble(self, mu=None):
@@ -92,18 +93,20 @@ class DiffusionOperatorP2(NumpyMatrixBasedOperator):
         del SF_GRAD
 
         # calculate all local scalar products between gradients
-        if self.diffusion_function is not None and self.diffusion_function.shape_range == tuple():
-            # evaluate diffusion function
-            D = self.diffusion_function(g.quadrature_points(0, order=2), mu=mu)
-            SF_INTS = np.einsum('epic,eqic,c,e,ec->epq', SF_GRADS, SF_GRADS, w, g.integration_elements(0), D).ravel()
-            del D
-        elif self.diffusion_function is not None:
-            # evaluate diffusion function
-            D = self.diffusion_function(g.quadrature_points(0, order=2), mu=mu)
-            SF_INTS = np.einsum('epic,eqjc,c,e,ecij->epq', SF_GRADS, SF_GRADS, w, g.integration_elements(0), D).ravel()
-            del D
-        else:
-            SF_INTS = np.einsum('epic,eqic,c,e->epq', SF_GRADS, SF_GRADS, w, g.integration_elements(0)).ravel()
+        #if self.diffusion_function is not None and self.diffusion_function.shape_range == tuple():
+        #    # evaluate diffusion function
+        #    D = self.diffusion_function(g.quadrature_points(0, order=2), mu=mu)
+        #    SF_INTS = np.einsum('epic,eqic,c,e,ec->epq', SF_GRADS, SF_GRADS, w, g.integration_elements(0), D).ravel()
+        #    del D
+        #elif self.diffusion_function is not None:
+        #    # evaluate diffusion function
+        #    D = self.diffusion_function(g.quadrature_points(0, order=2), mu=mu)
+        #    SF_INTS = np.einsum('epic,eqjc,c,e,ecij->epq', SF_GRADS, SF_GRADS, w, g.integration_elements(0), D).ravel()
+        #    del D
+        #else:
+        #    SF_INTS = np.einsum('epic,eqic,c,e->epq', SF_GRADS, SF_GRADS, w, g.integration_elements(0)).ravel()
+
+        SF_INTS = np.einsum('epic,eqjc,c,e,ij->epq', SF_GRADS, SF_GRADS, w, g.integration_elements(0), self.diffusion_function).ravel()
 
         del SF_GRADS
 
@@ -372,7 +375,7 @@ class AdvectionOperatorP1(NumpyMatrixBasedOperator):
         # calculate scalar products
         if self.advection_function is not None:
             A = self.advection_function(g.centers(0), mu=mu)
-            INT = np.einsum('pq,evj,e,q,eij->evpi', PSF, VSF_GRADS, g.integration_elements(0), w, A)
+            INT = np.einsum('pq,evij,e,q,eij->evpi', PSF, VSF_GRADS, g.integration_elements(0), w, A)
         else:
             INT = np.einsum('pq,evi,e,q->evpi', PSF, VSF_GRADS, g.integration_elements(0), w)
         del PSF, VSF_GRADS, w
@@ -408,10 +411,10 @@ class AdvectionOperatorP2(NumpyMatrixBasedOperator):
 
     def __init__(self, grid, boundary_info, advection_function=None, dirichlet_clear_rows=False, name=None):
         assert grid.reference_element is triangle
-        assert advection_function is None or \
-            (advection_function is not None and \
-                advection_function.dim_domain == grid.dim_outer and \
-                advection_function.shape_range == (grid.dim_outer,)*2)
+        #assert advection_function is None or \
+        #    (advection_function is not None and \
+        #        advection_function.dim_domain == grid.dim_outer and \
+        #        advection_function.shape_range == (grid.dim_outer,)*2)
         self.source = NumpyVectorSpace(grid.size(grid.dim))
         self.range = NumpyVectorSpace(grid.dim * (grid.size(grid.dim) + grid.size(grid.dim - 1)))
         self.grid = grid
@@ -419,8 +422,8 @@ class AdvectionOperatorP2(NumpyMatrixBasedOperator):
         self.advection_function = advection_function
         self.dirichlet_clear_rows = dirichlet_clear_rows
         self.name = name
-        if advection_function is not None:
-            self.build_parameter_type(inherits=(advection_function,))
+        #if advection_function is not None:
+        #    self.build_parameter_type(inherits=(advection_function,))
 
     def _assemble(self, mu=None):
         g = self.grid
@@ -463,11 +466,14 @@ class AdvectionOperatorP2(NumpyMatrixBasedOperator):
         del VSF_GRAD
 
         # calculate products between all pressure shape functions and gradients of velocity shape functions
-        if self.advection_function is not None:
-            A = self.advection_function(self.grid.centers(0), mu=mu)
-            INT = np.einsum('pq,evjq,e,q,eij->evpi', PSF, VSF_GRADS, g.integration_elements(0), w, A)
-        else:
-            INT = np.einsum('pq,eviq,e,q->evpi', PSF, VSF_GRADS, g.integration_elements(0), w)
+        #if self.advection_function is not None:
+        #    A = self.advection_function(self.grid.centers(0), mu=mu)
+        #    INT = np.einsum('pq,evjq,e,q,eij->evpi', PSF, VSF_GRADS, g.integration_elements(0), w, A)
+        #else:
+        #    INT = np.einsum('pq,eviq,e,q->evpi', PSF, VSF_GRADS, g.integration_elements(0), w)
+
+        INT = np.einsum('pq,evjq,e,q,ij->evpi', PSF, VSF_GRADS, g.integration_elements(0), w, self.advection_function)
+
         del PSF, VSF_GRADS, w
 
         INTS = [INT[..., i].ravel() for i in xrange(g.dim)]
@@ -557,16 +563,13 @@ class L2VectorProductFunctionalP1(NumpyMatrixBasedOperator):
     """
 
     def __init__(self, grid, function, boundary_info=None, dirichlet_data=None, neumann_data=None, robin_data=None,
-                 order=2, transformation_function=None, dirichlet_transformation=None, clear_dirichlet_dofs=False,
+                 order=2, transformation_function=None, clear_dirichlet_dofs=False,
                  clear_non_dirichlet_dofs=False, name=None):
         assert grid.reference_element is triangle
         assert isinstance(function, FunctionInterface)
         assert transformation_function is None or \
                (transformation_function.dim_domain == grid.dim_outer and \
                    transformation_function.shape_range == (grid.dim_outer,)*2)
-        assert dirichlet_transformation is None or \
-               (dirichlet_transformation.dim_domain == grid.dim_outer and \
-                   dirichlet_transformation.shape_range == (grid.dim_outer,)*2)
 
         #assert (clear_dirichlet_dofs and not clear_non_dirichlet_dofs) or\
         #       (not clear_dirichlet_dofs and clear_non_dirichlet_dofs)
@@ -582,7 +585,6 @@ class L2VectorProductFunctionalP1(NumpyMatrixBasedOperator):
         self.robin_data = robin_data
         self.order = order
         self.transformation_function = transformation_function
-        self.dirichlet_transformation = dirichlet_transformation
         self.clear_dirichlet_dofs = clear_dirichlet_dofs
         self.clear_non_dirichlet_dofs = clear_non_dirichlet_dofs
         self.name = name
@@ -660,9 +662,9 @@ class L2VectorProductFunctionalP1(NumpyMatrixBasedOperator):
                 # evaluate dirichlet function
                 D = self.dirichlet_data(DC, mu=mu)
 
-                if self.dirichlet_transformation is not None:
+                if self.transformation_function is not None:
                     # apply piola transformation
-                    T = self.dirichlet_transformation(DC, mu=mu)
+                    T = self.transformation_function(DC, mu=mu)
                     D = np.einsum('eij,ej->ei', T, D)
                 for i in xrange(g.dim):
                     I[i][DN] = D[..., i]
@@ -687,13 +689,9 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
                  clear_non_dirichlet_dofs = False, name=None):
         assert grid.reference_element is triangle
         assert isinstance(function, FunctionInterface)
-        assert transformation_function is None or \
-               (transformation_function.dim_domain == grid.dim_outer and \
-                   transformation_function.shape_range == (grid.dim_outer,)*2)
-        assert dirichlet_transformation is None or \
-               (dirichlet_transformation.dim_domain == grid.dim_outer and \
-                   dirichlet_transformation.shape_range == (grid.dim_outer,)*2)
-
+        #assert transformation_function is None or \
+        #       (transformation_function.dim_domain == grid.dim_outer and \
+        #           transformation_function.shape_range == (grid.dim_outer,)*2)
 
         #assert (clear_dirichlet_dofs and not clear_non_dirichlet_dofs) or\
         #       (not clear_dirichlet_dofs and clear_non_dirichlet_dofs)
@@ -719,9 +717,9 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
         if robin_data is not None:
             raise NotImplementedError
 
-        if transformation_function is not None:
-            self.build_parameter_type(inherits=(transformation_function,))
-        self.parameter_type = {'transformation': (2, 2)}
+        #if transformation_function is not None:
+        #    self.build_parameter_type(inherits=(transformation_function,))
+        #self.parameter_type = {'transformation': (2, 2)}
 
     def _assemble(self, mu=None):
         g = self.grid
@@ -741,8 +739,8 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
 
         if self.transformation_function is not None:
             # apply piola transformation
-            T = self.transformation_function(g.quadrature_points(0, order=self.order), mu=mu)
-            F_1 = np.einsum('ecij,ecj->eci', T, F_0)
+            #T = self.transformation_function(g.quadrature_points(0, order=self.order), mu=mu)
+            F_1 = np.einsum('ij,ecj->eci', self.transformation_function, F_0)
 
         # calculate integrals for f_i separately
         if self.clear_non_dirichlet_dofs:
@@ -803,8 +801,8 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
 
                 if self.dirichlet_transformation is not None:
                     # apply piola transformation
-                    T = self.dirichlet_transformation(DC, mu=mu)
-                    D = np.einsum('eij,ej->ei', T, D)
+                    #T = self.transformation_function(DC, mu=mu)
+                    D = np.einsum('ij,ej->ei', self.dirichlet_transformation, D)
                 for i in xrange(g.dim):
                     I[i][DN] = D[..., i]
             else:
