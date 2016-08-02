@@ -8,6 +8,7 @@ from pymor.domaindescriptions.interfaces import DomainDescriptionInterface
 from pymor.functions.basic import FunctionBase, GenericFunction
 from pymor.parameters.base import Parameter
 from pymor.parameters.functionals import GenericParameterFunctional
+from pymor.parameters.spaces import CubicParameterSpace
 
 from stokes.domaindescriptions.polygonal import PolygonalDomain
 
@@ -18,7 +19,7 @@ from stokes.functions.affine_transformation import AffineTransformation
 
 class PiecewiseAffineTransformation(FunctionBase):
 
-    def __init__(self, domain, mapping):
+    def __init__(self, domain, mapping, parameter_type, ranges):
         """
 
         Parameters
@@ -36,6 +37,8 @@ class PiecewiseAffineTransformation(FunctionBase):
         self.domain = domain
         self.mapping = mapping
         self.num_subdomains = len(domain.subdomains)
+        self.build_parameter_type(parameter_type, local_global=True)
+        self.parameter_space = CubicParameterSpace(parameter_type, None, None, ranges)
 
     def diffusion_functions(self):
         return self._functions()
@@ -52,7 +55,7 @@ class PiecewiseAffineTransformation(FunctionBase):
     def diffusion_functionals(self, mu=None):
         functionals = [GenericParameterFunctional(mapping=partial(self._diffusion_functional, subdomain_index=si,
                                                                   index=(i, j)),
-                                                  parameter_type={'transformation': (2, 2)}, # TODO type richtig???
+                                                  parameter_type=self.parameter_type, # TODO type richtig???
                                                   name='Transformation')
                        for si in range(self.num_subdomains) for i, j in product(xrange(2), xrange(2))]
 
@@ -61,7 +64,7 @@ class PiecewiseAffineTransformation(FunctionBase):
     def advection_functionals(self, mu=None):
         functionals = [GenericParameterFunctional(mapping=partial(self._advection_functional, subdomain_index=si,
                                                                   index=(i, j)),
-                                                  parameter_type={'transformation': (2, 2)}, # TODO type richtig???
+                                                  parameter_type=self.parameter_type, # TODO type richtig???
                                                   name='Transformation')
                        for si in range(self.num_subdomains) for i, j in product(xrange(2), xrange(2))]
 
@@ -70,7 +73,7 @@ class PiecewiseAffineTransformation(FunctionBase):
     def rhs_functionals(self, mu=None):
         functionals = [GenericParameterFunctional(mapping=partial(self._rhs_functional, subdomain_index=si,
                                                                   index=(i, j)),
-                                                  parameter_type={'transformation': (2, 2)}, # TODO type richtig???
+                                                  parameter_type=self.parameter_type, # TODO type richtig???
                                                   name='Transformation')
                        for si in range(self.num_subdomains) for i, j in product(xrange(2), xrange(2))]
 
@@ -79,7 +82,7 @@ class PiecewiseAffineTransformation(FunctionBase):
     def dirichlet_data_functionals(self, mu=None):
         functionals = [GenericParameterFunctional(mapping=partial(self._dirichlet_data_functional, subdomain_index=si,
                                                                   index=(i, j)),
-                                                  parameter_type={'transformation': (2, 2)}, # TODO type richtig???
+                                                  parameter_type=self.parameter_type, # TODO type richtig???
                                                   name='Transformation')
                        for si in range(self.num_subdomains) for i, j in product(xrange(2), xrange(2))]
 
@@ -150,7 +153,7 @@ class PiecewiseAffineTransformation(FunctionBase):
             reshape(x.shape[:-1] + true_value.shape)
 
     def _functions(self):
-        return [GenericFunction(mapping=partial(self._functions, subdomian_index=si, true_value=tv), dim_domain=2,
+        return [GenericFunction(mapping=partial(self._function, subdomain_index=si, true_value=tv), dim_domain=2,
                                 shape_range=(2, 2)) for si in range(self.num_subdomains) for tv in
                 [np.array([[1.0, 0.0], [0.0, 0.0]]),
                  np.array([[0.0, 1.0], [0.0, 0.0]]),
@@ -185,10 +188,10 @@ class PiecewiseAffineTransformation(FunctionBase):
         # mu = mu['transformation']
 
         # get parameter_list
-        parameter_list = self.mapping(mu)
+        p = self.parse_parameter(mu)
+        parameter_list = self.mapping(p)
         parameter = parameter_list[subdomain_index]
-        p = self.parse_parameter(parameter)
-        a = p['matrix']
+        a = parameter['matrix']
         # b = p['vector']
 
         # jacobian_inverse
@@ -233,10 +236,10 @@ class PiecewiseAffineTransformation(FunctionBase):
         # mu = mu['transformation']
 
         # get parameter_list
-        parameter_list = self.mapping(mu)
+        p = self.parse_parameter(mu)
+        parameter_list = self.mapping(p)
         parameter = parameter_list[subdomain_index]
-        p = self.parse_parameter(parameter)
-        a = p['matrix']
+        a = parameter['matrix']
         # b = p['vector']
 
         # jacobian_inverse
@@ -281,10 +284,10 @@ class PiecewiseAffineTransformation(FunctionBase):
         # mu = mu['transformation']
 
         # get parameter_list
-        parameter_list = self.mapping(mu)
+        p = self.parse_parameter(mu)
+        parameter_list = self.mapping(p)
         parameter = parameter_list[subdomain_index]
-        p = self.parse_parameter(parameter)
-        a = p['matrix']
+        a = parameter['matrix']
         # b = p['vector']
 
         # jacobian_inverse
@@ -328,10 +331,10 @@ class PiecewiseAffineTransformation(FunctionBase):
         # mu = mu['transformation']
 
         # get parameter_list
-        parameter_list = self.mapping(mu)
+        p = self.parse_parameter(mu)
+        parameter_list = self.mapping(p)
         parameter = parameter_list[subdomain_index]
-        p = self.parse_parameter(parameter)
-        a = p['matrix']
+        a = parameter['matrix']
         # b = p['vector']
 
         # jacobian_inverse
@@ -425,14 +428,14 @@ class PiecewiseAffineTransformation(FunctionBase):
         for i in range(num_subdomains):
             m = subdomain_mask == i
             x2 = x[m] - ll[i]
-            res[m] = self._apply(x2, parameter_list[i]) + ll[i]
+            res[m] = self._apply(x2, parameter_list[i])# + ll[i]
 
         # return
         return res
 
     def _apply(self, x, mu=None):
         # parse mu
-        mu = self.parse_parameter(mu)
+        #mu = self.parse_parameter(mu)
         a = mu['matrix']
         b = mu['translation']
 
@@ -443,31 +446,3 @@ class PiecewiseAffineTransformation(FunctionBase):
         res += b
 
         return res
-
-
-
-if __name__ == '__main__':
-
-    from pymor.domaindescriptions.basic import RectDomain
-    from pymor.domaindescriptions.boundarytypes import BoundaryType
-
-    from stokes.domaindescriptions.polygonal import PolygonalDomain
-
-    d = PolygonalDomain(points=[[0, 0], [1, 0], [2, 0], [2, 1], [1, 1], [0, 1]],
-                        boundary_types={BoundaryType('dirichlet'): [0, 1, 2, 3, 4, 5]},
-                        holes=[],
-                        inner_edges=[[1, 4]],
-                        subdomains=[[0, 1, 4, 5], [1, 2, 3, 4]])
-
-    t0 = AffineTransformation('transformation', 0.1, 1.0, None, 't0')
-    t1 = AffineTransformation('transformation', 0.1, 1.0, None, 't1')
-
-    t = PiecewiseAffineTransformation(d, None)
-    b = np.array([[True, False, False], [False, True, True]])
-    x = np.array([[0, 0], [0.5, 0.5], [1, 0], [2, 1], [1.0000000001, 0]])
-
-    b0 = t.characterisitc_function(x, 0)
-    f0 = np.outer(b0, np.array([[1.0, 0.0], [0.0, 0.0]])).reshape(x.shape[:-1] + (2, 2))
-
-
-    z=0

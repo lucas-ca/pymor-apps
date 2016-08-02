@@ -1,23 +1,21 @@
-# -*- coding: utf-8 -*-
-# This file is part of the pyMOR project (http://www.pymor.org).
-# Copyright Holders: Rene Milk, Stephan Rave, Felix Schindler
-# License: BSD 2-Clause License (http://opensource.org/licenses/BSD-2-Clause)
-
 from __future__ import absolute_import, division, print_function
 
-import numpy as np
-from functools import partial
-
 from stokes.analyticalproblems.stokes import StokesProblem
-from pymor.functions.basic import ConstantFunction
-from pymor.parameters.functionals import GenericParameterFunctional
+from stokes.functions.affine_transformation import AffineTransformation
+from stokes.functions.piecewise_affine_transformation import PiecewiseAffineTransformation
 
 
 class AffineTransformedStokes(StokesProblem):
 
-    def __init__(self, problem, affine_transformation):
+    def __init__(self, problem, transformation, name=None):
+
+        # problem must be a stokes problem
         assert isinstance(problem, StokesProblem)
-        
+
+        # transformation must be a AffineTransformation
+        assert isinstance(transformation, AffineTransformation) or\
+            isinstance(transformation, PiecewiseAffineTransformation)
+
         # rhs
         assert problem.rhs_functions is None
         assert problem.rhs_functionals is None
@@ -33,145 +31,50 @@ class AffineTransformedStokes(StokesProblem):
         # dirichlet data
         assert problem.dirichlet_data_functions is None
         assert problem.dirichlet_data_functionals is None
-        
-        # diffusion
-        def evaluate_diffusion_functional(mu, entry):
-
-            A = mu['transformation']
-
-            det = np.linalg.det(A)
-            inv = np.linalg.inv(A)
-
-            assert not det == 0
-
-            res = inv.dot(inv.T) * det
-
-            return res[entry]
-
-        # advection
-        def evaluate_advection_functional(mu, entry):
-
-            A = mu['transformation']
-
-            det = np.linalg.det(A)
-            inv = np.linalg.inv(A)
-
-            assert not det == 0
-
-            res = inv.T * det
-
-            return res[entry]
-
-        # rhs
-        def evaluate_rhs_functional(mu, entry):
-
-            A = mu['transformation']
-
-            det = np.linalg.det(A)
-            
-            assert not det == 0
-
-            res = 1.0/det * A
-
-            return res[entry]
-
-        # dirichlet data
-        def evaluate_dirichlet_data_functional(mu, entry):
-
-            A = mu['transformation']
-
-            det = np.linalg.det(A)
-
-            assert not det == 0
-
-            res = 1.0/det * A
-
-            return res[entry]
-
-        functions = [ConstantFunction(np.array([[1.0, 0.0], [0.0, 0.0]]), dim_domain=2),
-                     ConstantFunction(np.array([[0.0, 1.0], [0.0, 0.0]]), dim_domain=2),
-                     ConstantFunction(np.array([[0.0, 0.0], [1.0, 0.0]]), dim_domain=2),
-                     ConstantFunction(np.array([[0.0, 0.0], [0.0, 1.0]]), dim_domain=2)]
-
-        self.diffusion_functions = functions
-        self.advection_functions = functions
-        self.rhs_transformation_functions = functions
-        self.dirichlet_data_transformation_functions = functions
 
         # diffusion
-        self.diffusion_functionals = [GenericParameterFunctional(mapping=partial(evaluate_diffusion_functional,
-                                                                                 entry=(0, 0)),
-                                                                 parameter_type={'transformation': (2, 2)},
-                                                                 name='Transformation'),
-                                      GenericParameterFunctional(mapping=partial(evaluate_diffusion_functional,
-                                                                                 entry=(0, 1)),
-                                                                 parameter_type={'transformation': (2, 2)},
-                                                                 name='Transformation'),
-                                      GenericParameterFunctional(mapping=partial(evaluate_diffusion_functional,
-                                                                                 entry=(1, 0)),
-                                                                 parameter_type={'transformation': (2, 2)},
-                                                                 name='Transformation'),
-                                      GenericParameterFunctional(mapping=partial(evaluate_diffusion_functional,
-                                                                                 entry=(1, 1)),
-                                                                 parameter_type={'transformation': (2, 2)},
-                                                                 name='Transformation')]
+        diffusion_functions = transformation.diffusion_functions()
+        diffusion_functionals = transformation.diffusion_functionals()
 
         # advection
-        self.advection_functionals = [GenericParameterFunctional(mapping=partial(evaluate_advection_functional,
-                                                                                 entry=(0, 0)),
-                                                                 parameter_type={'transformation': (2, 2)},
-                                                                 name='Transformation'),
-                                      GenericParameterFunctional(mapping=partial(evaluate_advection_functional,
-                                                                                 entry=(0, 1)),
-                                                                 parameter_type={'transformation': (2, 2)},
-                                                                 name='Transformation'),
-                                      GenericParameterFunctional(mapping=partial(evaluate_advection_functional,
-                                                                                 entry=(1, 0)),
-                                                                 parameter_type={'transformation': (2, 2)},
-                                                                 name='Transformation'),
-                                      GenericParameterFunctional(mapping=partial(evaluate_advection_functional,
-                                                                                 entry=(1, 1)),
-                                                                 parameter_type={'transformation': (2, 2)},
-                                                                 name='Transformation')]
+        advection_functions = transformation.advection_functions()
+        advection_functionals = transformation.advection_functionals()
 
         # rhs
-        self.rhs_functionals = [GenericParameterFunctional(mapping=partial(evaluate_rhs_functional, entry=(0, 0)),
-                                                           parameter_type={'transformation': (2, 2)},
-                                                           name='Transformation'),
-                                GenericParameterFunctional(mapping=partial(evaluate_rhs_functional, entry=(0, 1)),
-                                                           parameter_type={'transformation': (2, 2)},
-                                                           name='Transformation'),
-                                GenericParameterFunctional(mapping=partial(evaluate_rhs_functional, entry=(1, 0)),
-                                                           parameter_type={'transformation': (2, 2)},
-                                                           name='Transformation'),
-                                GenericParameterFunctional(mapping=partial(evaluate_rhs_functional, entry=(1, 1)),
-                                                           parameter_type={'transformation': (2, 2)},
-                                                           name='Transformation')]
+        rhs_functions = transformation.rhs_functions()
+        rhs_functionals = transformation.rhs_functionals()
 
-        # dirichlet data
-        self.dirichlet_data_functionals = [GenericParameterFunctional(mapping=
-                                                                      partial(evaluate_dirichlet_data_functional,
-                                                                              entry=(0, 0)),
-                                                                      parameter_type={'transformation': (2, 2)},
-                                                                      name='Transformation'),
-                                           GenericParameterFunctional(mapping=
-                                                                      partial(evaluate_dirichlet_data_functional,
-                                                                              entry=(0, 1)),
-                                                                      parameter_type={'transformation': (2, 2)},
-                                                                      name='Transformation'),
-                                           GenericParameterFunctional(mapping=
-                                                                      partial(evaluate_dirichlet_data_functional,
-                                                                              entry=(1, 0)),
-                                                                      parameter_type={'transformation': (2, 2)},
-                                                                      name='Transformation'),
-                                           GenericParameterFunctional(mapping=
-                                                                      partial(evaluate_dirichlet_data_functional,
-                                                                              entry=(1, 1)),
-                                                                      parameter_type={'transformation': (2, 2)},
-                                                                      name='Transformation')]
-        self.domain = problem.domain
-        self.rhs = problem.rhs
-        self.dirichlet_data = problem.dirichlet_data
-        self.neumann_data = problem.neumann_data
-        self.robin_data = problem.robin_data
-        self.parameter_space = problem.parameter_space
+        # dirichlet_data
+        dirichlet_data_functions = transformation.dirichlet_data_functions()
+        dirichlet_data_functionals = transformation.dirichlet_data_functionals()
+
+        # mass
+        #mass_functions = transformation.mass_functions()
+        #mass_functionals = transformation.mass_functionals()
+
+        # domain = problem.domain
+        # rhs = problem.rhs
+        # dirichlet_data = problem.dirichlet_data
+        # neumann_data = problem.neumann_data
+        # robin_data = problem.robin_data
+
+        super(AffineTransformedStokes, self).__init__(domain=problem.domain,
+                                                      rhs=problem.rhs,
+                                                      rhs_functions=rhs_functions,
+                                                      rhs_functionals=rhs_functionals,
+                                                      diffusion_functions=diffusion_functions,
+                                                      diffusion_functionals=diffusion_functionals,
+                                                      advection_functions=advection_functions,
+                                                      advection_functionals=advection_functionals,
+                                                      dirichlet_data=problem.dirichlet_data,
+                                                      dirichlet_data_functions=dirichlet_data_functions,
+                                                      dirichlet_data_functionals=dirichlet_data_functionals,
+                                                      #mass_functions=mass_functions,
+                                                      #mass_functionals=mass_functionals,
+                                                      neumann_data=problem.neumann_data,
+                                                      robin_data=problem.robin_data,
+                                                      viscosity=problem.viscosity,
+                                                      #parameter_space=problem.parameter_space,
+                                                      parameter_space=transformation.parameter_space,
+                                                      name=name)
+        self.transformation = transformation

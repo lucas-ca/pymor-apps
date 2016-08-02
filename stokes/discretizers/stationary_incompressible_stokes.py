@@ -1,38 +1,28 @@
-# This file is part of the pyMOR project (http://www.pymor.org).
-# Copyright Holders: Rene Milk, Stephan Rave, Felix Schindler
-# License: BSD 2-Clause License (http://opensource.org/licenses/BSD-2-Clause)
-
 from __future__ import absolute_import, division, print_function
 
-from stokes.analyticalproblems.affine_transformed_stokes_new import AffineTransformedStokes
-from stokes.analyticalproblems.stokes import StokesProblem
 from pymor.discretizations.basic import StationaryDiscretization
 from pymor.domaindiscretizers.default import discretize_domain_default
 from pymor.grids.boundaryinfos import EmptyBoundaryInfo
 from pymor.grids.referenceelements import line, triangle, square
-from pymor.gui.qt import PatchVisualizer, Matplotlib1DVisualizer
-from pymor.operators import cg
+from pymor.operators.cg import DiffusionOperatorP1, L2ProductP1
 from pymor.operators.constructions import LincombOperator
 from pymor.vectorarrays.numpy import NumpyVectorSpace
 
-# operators
-from pymor.operators.cg import DiffusionOperatorP1
-
-from stokes.grids.affine_transformed_tria import AffineTransformedTriaGrid
-from stokes.operators.cg import DiffusionOperatorP2, AdvectionOperatorP1, AdvectionOperatorP2, RelaxationOperatorP1,\
-    TransposedOperator, ZeroOperator, L2VectorProductFunctionalP1, L2VectorProductFunctionalP2
+from stokes.analyticalproblems.stokes import StokesProblem
 from stokes.operators.block import StokesLhsBlockOperator, StokesRhsBlockOperator, DiagonalBlockOperator
+from stokes.operators.cg import DiffusionOperatorP2, AdvectionOperatorP1, AdvectionOperatorP2, RelaxationOperatorP1,\
+    TransposedOperator, ZeroOperator, L2VectorProductFunctionalP1, L2VectorProductFunctionalP2, L2ProductP2, \
+    RelaxationOperator2
 
-# visualizer
-from stokes.gui.stokes_visualizer import StokesVisualizer
 
 def discretize_stationary_incompressible_stokes(analytical_problem, diameter=None, domain_discretizer=None,
-                           grid=None, boundary_info=None, fem_order=2, plot_type=None, resolution=None, mu=None):
-    """Discretizes an |EllipticProblem| using finite elements.
+                                                grid=None, boundary_info=None, fem_order=2):
+    """Discretizes an Stokes problem using finite elements.
+
     Parameters
     ----------
     analytical_problem
-        The |EllipticProblem| to discretize.
+        The Stokes problem to discretize.
     diameter
         If not `None`, `diameter` is passed to the `domain_discretizer`.
     domain_discretizer
@@ -48,13 +38,7 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
         Must be provided if `grid` is specified.
     fem_order
         The order of finite element method to be used.
-    plot_type
-        Type of velocity plots:
-            0: separate u_1 and u_2 plots
-            1: quiver plot
-            2: streamline plot
-    resolution
-        Number of vectors in quiver plot.
+
     Returns
     -------
     discretization
@@ -92,11 +76,15 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
         AdvectionOperator = AdvectionOperatorP1
         #RelaxationOperator = RelaxationOperatorP1
         Functional = L2VectorProductFunctionalP1
+        MassOperator_velocity = L2ProductP1
+        MassOperator_pressure = L2ProductP1
     elif fem_order == 2:
         DiffusionOperator = DiffusionOperatorP2
         AdvectionOperator = AdvectionOperatorP2
         #RelaxationOperator = ZeroOperator
         Functional = L2VectorProductFunctionalP2
+        MassOperator_velocity = L2ProductP2
+        MassOperator_pressure = L2ProductP1
     else:
         raise NotImplementedError
 
@@ -143,11 +131,14 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
                         # boundary part
                         # ---
                         # non boundary part
-                        Ci = [RelaxationOperatorP1(grid, name='diffusion_{0}'.format(i))
+                        # TODO new relaxation operator
+                        Ci = [RelaxationOperator2(grid=grid, boundary_info=empty_boundary_info, diffusion_function=df,
+                                                  name='relaxation_{0}'.format(i))
                               for i, df in enumerate(p.diffusion_functions)]
                         C = LincombOperator(Ci, list(p.diffusion_functionals), name='relaxation')
                     elif fem_order == 2:
-                        C = ZeroOperator(source=grid.size(grid.dim), range=grid.size(grid.dim), name='relaxation')
+                        C = ZeroOperator(source=grid.size(grid.dim), range=grid.size(grid.dim), sparse=True,
+                                         name='relaxation')
                     else:
                         raise NotImplementedError
 
@@ -180,6 +171,44 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
                           for i, tf in enumerate(p.rhs_functions)]
                     F1 = LincombOperator(operators=Fi0 + Fi,
                                          coefficients=list(p.dirichlet_data_functionals) + list(p.rhs_functionals))
+
+                    # supremizer operators
+                    # supremizer operator mass
+                    supremizer_operator_mass_1 = MassOperator_velocity(grid=grid, boundary_info=empty_boundary_info,
+                                                              dirichlet_clear_rows=False, dirichlet_clear_columns=False,
+                                                              dirichlet_clear_diag=False, coefficient_function=None,
+                                                              solver_options=None, name='supremizer_mass')
+                    supremizer_operator_mass = DiagonalBlockOperator([supremizer_operator_mass_1,
+                                                                      supremizer_operator_mass_1])
+                    # supremizer operator advection
+                    # boundary part
+                    # ---
+                    # non boundary part
+                    supremizer_operator_advection_i = [AdvectionOperator(grid=grid, boundary_info=empty_boundary_info,
+                                                                         advection_function=af,
+                                                                         dirichlet_clear_rows=False,
+                                                                         name='supremizer_advection_{0}'.format(i))
+                                                       for i, af in enumerate(p.advection_functions)]
+                    supremizer_operator_advection = LincombOperator(operators=supremizer_operator_advection_i,
+                                                                    coefficients=list(p.advection_functionals),
+                                                                    name='supremizer_advection')
+
+                    ### operators for calculation inf sup constant
+
+                    # mass matrix of pressure
+                    mass_pressure = MassOperator_pressure(grid=grid, boundary_info=empty_boundary_info,
+                                                          dirichlet_clear_rows=False, dirichlet_clear_columns=False,
+                                                          dirichlet_clear_diag=False, coefficient_function=None,
+                                                          solver_options=None, name='pressure_mass_matrix')
+
+                    stiffness_velocity = DiffusionOperator(grid=grid, boundary_info=empty_boundary_info,
+                                                           diffusion_function=None, diffusion_constant=None,
+                                                           dirichlet_clear_columns=False, dirichlet_clear_diag=False,
+                                                           name='velocity_stiffness_matrix')
+
+                    velocity_divergence = AdvectionOperator(grid=grid, boundary_info=empty_boundary_info,
+                                                            advection_function=None, dirichlet_clear_rows=False,
+                                                            name='velocity_divergence_matrix')
                 else:
                     raise ValueError
             else:
@@ -194,43 +223,143 @@ def discretize_stationary_incompressible_stokes(analytical_problem, diameter=Non
                               dirichlet_clear_rows=True, name='advection')], coefficients=[-1.0], name='advection')
         Bt = TransposedOperator(AdvectionOperator(grid=grid, boundary_info=empty_boundary_info, advection_function=None,
                               dirichlet_clear_rows=False, name='advection'))
+
         if fem_order == 1:
-            C = RelaxationOperatorP1(grid=grid, name='relaxation')
+            # TODO new relaxation operator
+            #C = RelaxationOperatorP1(grid=grid,  name='relaxation')
+            C = LincombOperator([RelaxationOperator2(grid=grid, boundary_info=empty_boundary_info, name='relaxation')],
+                                [1.0])
         elif fem_order == 2:
             C = ZeroOperator(source=NumpyVectorSpace(grid.size(grid.dim)), range=NumpyVectorSpace(grid.size(grid.dim)),
-                             sparse=False, name='relaxation')
+                             sparse=True, name='relaxation')
         F1 = Functional(grid=grid, function=p.rhs, boundary_info=boundary_info, dirichlet_data=p.dirichlet_data,
                        neumann_data=p.neumann_data, robin_data=p.robin_data, transformation_function=None,
                        clear_dirichlet_dofs=False, clear_non_dirichlet_dofs=False)
 
+        # supremizer operators
+        # supremizer operator mass
+        supremizer_operator_mass_1 = MassOperator_velocity(grid=grid, boundary_info=empty_boundary_info,
+                                                  dirichlet_clear_rows=False, dirichlet_clear_columns=False,
+                                                  dirichlet_clear_diag=False, coefficient_function=None,
+                                                  solver_options=None, name='supremizer_mass')
+        supremizer_operator_mass = DiagonalBlockOperator([supremizer_operator_mass_1, supremizer_operator_mass_1])
+        # supremizer operator advection
+        supremizer_operator_advection = AdvectionOperator(grid=grid, boundary_info=empty_boundary_info,
+                                                          advection_function=None, dirichlet_clear_rows=False,
+                                                          name='supremizer_advection')
+
+        # operators for calculation inf sup constant
+        mass_pressure = MassOperator_pressure(grid=grid, boundary_info=empty_boundary_info, dirichlet_clear_rows=False,
+                                              dirichlet_clear_columns=False, dirichlet_clear_diag=False,
+                                              coefficient_function=None, solver_options=None,
+                                              name='pressure_mass_matrix')
+        stiffness_velocity = DiffusionOperator(grid=grid, boundary_info=empty_boundary_info, diffusion_function=None,
+                                               diffusion_constant=None, dirichlet_clear_columns=False,
+                                               dirichlet_clear_diag=False, name='velocity_stiffness_matrix')
+        velocity_divergence = AdvectionOperator(grid=grid, boundary_info=empty_boundary_info, advection_function=None,
+                                                dirichlet_clear_rows=False, name='velocity_divergence_matrix')
+
     # zero component on rhs
     Fz = ZeroOperator(source=NumpyVectorSpace(grid.size(grid.dim)), range=NumpyVectorSpace(1), sparse=False)
 
-    # build complete stokes operator
+    # build complete stiffness matrix
     A2 = DiagonalBlockOperator([A, A])
+
+    # operator
     L = StokesLhsBlockOperator([A2, B, Bt, C])
+
+    # functional
     F = StokesRhsBlockOperator([F1, Fz])
 
-    # save
-    #import numpy as np
-    #np.savetxt('/home/lucas/A_alt', A.assemble(mu)._matrix.todense())
-    #np.savetxt('/home/lucas/B_alt', -1.*op_B.todense())
-    #np.savetxt('/home/lucas/Bt_alt', op_BT.T.todense())
-    #np.savetxt('/home/lucas/C_alt', op_C)
+    #if None:#isinstance(p, AffineTransformedStokes):
+    #    plot_grid = AffineTransformedTriaGrid(grid, p.transformation)
+    #else:
+    #    plot_grid = grid
 
-    if isinstance(p, AffineTransformedStokes):
-        plot_grid = AffineTransformedTriaGrid(grid, p.transformation)
+    visualizer = None
+
+    # products
+    if fem_order == 1:
+        l2_prod_velocity = L2ProductP1
+        h1_semi_prod_velocity = DiffusionOperatorP1
+        zero_velocity = ZeroOperator(source=grid.size(grid.dim), range=grid.size(grid.dim), sparse=True)
+        l2_prod_pressure = L2ProductP1
+        h1_semi_prod_pressure = DiffusionOperatorP1
+        zero_pressure = ZeroOperator(source=grid.size(grid.dim), range=grid.size(grid.dim), sparse=True)
+        energy_c = RelaxationOperatorP1(grid=grid)
+    elif fem_order == 2:
+        l2_prod_velocity = L2ProductP2
+        h1_semi_prod_velocity = DiffusionOperatorP2
+        zero_velocity = ZeroOperator(source=grid.size(grid.dim) + grid.size(grid.dim - 1),
+                                     range=grid.size(grid.dim) + grid.size(grid.dim - 1), sparse=True)
+        l2_prod_pressure = L2ProductP1
+        h1_semi_prod_pressure = DiffusionOperatorP1
+        zero_pressure = ZeroOperator(source=grid.size(grid.dim), range=grid.size(grid.dim), sparse=True)
+        energy_c = zero_pressure
     else:
-        plot_grid = grid
+        raise NotImplementedError
 
-    visualizer = StokesVisualizer(grid=plot_grid, bounding_box=grid.bounding_box(), codim=2, plot_type=plot_type,
-                                  resolution=resolution)
+    # L2 products
+    l2_product_vel = l2_prod_velocity(grid=grid, boundary_info=empty_boundary_info, dirichlet_clear_rows=False,
+                                      name='l2_vel')
+    l2_product_pre = l2_prod_pressure(grid=grid, boundary_info=empty_boundary_info, dirichlet_clear_rows=False,
+                                      name='l2_pre')
+    l2_product_u = DiagonalBlockOperator([l2_product_vel, zero_velocity, zero_pressure])
+    l2_product_v = DiagonalBlockOperator([zero_velocity, l2_product_vel, zero_pressure])
+    l2_product_p = DiagonalBlockOperator([zero_velocity, zero_velocity, l2_product_pre])
+    l2_product_uv = DiagonalBlockOperator([l2_product_vel, l2_product_vel, zero_pressure])
+    l2_product_uvp = DiagonalBlockOperator([l2_product_vel, l2_product_vel, l2_product_pre])
+    # for gram schmidt
+    l2_product_uv_single = DiagonalBlockOperator([l2_product_vel, l2_product_vel])
 
-    products = None
+    # H1 semi products
+    h1_semi_product_vel = h1_semi_prod_velocity(grid=grid, boundary_info=empty_boundary_info, name='h1_semi_vel')
+    h1_semi_product_pre = h1_semi_prod_pressure(grid=grid, boundary_info=empty_boundary_info, name='h1_semi_pre')
+    h1_semi_product_u = DiagonalBlockOperator([h1_semi_product_vel, zero_velocity, zero_pressure])
+    h1_semi_product_v = DiagonalBlockOperator([zero_velocity, h1_semi_product_vel, zero_pressure])
+    h1_semi_product_p = DiagonalBlockOperator([zero_velocity, zero_velocity, h1_semi_product_pre])
+    h1_semi_product_uv = DiagonalBlockOperator([h1_semi_product_vel, h1_semi_product_vel, zero_pressure])
+    h1_semi_product_uvp = DiagonalBlockOperator([h1_semi_product_vel, h1_semi_product_vel, h1_semi_product_pre])
+    # for gram schmidt
+    h1_semi_product_uv_single = DiagonalBlockOperator([h1_semi_product_vel, h1_semi_product_vel])
+
+    # energy norm
+    energy_a = DiagonalBlockOperator([h1_semi_product_vel, h1_semi_product_vel])
+    energy_b1 = LincombOperator(operators=[AdvectionOperator(grid=grid, boundary_info=empty_boundary_info,
+                                                             advection_function=None, dirichlet_clear_rows=False,
+                                                             name='energy_b1')], coefficients=[-1.0], name='energy_b1')
+    energy_b2 = TransposedOperator(AdvectionOperator(grid=grid, boundary_info=empty_boundary_info,
+                                                     advection_function=None, dirichlet_clear_rows=False,
+                                                     name='energy_b1'))
+    energy = StokesLhsBlockOperator([energy_a, energy_b1, energy_b2, energy_c])
+
+    products = {'h1_u': h1_semi_product_u + l2_product_u,
+                'h1_v': h1_semi_product_v + l2_product_v,
+                'h1_p': h1_semi_product_p + l2_product_p,
+                'h1_uv': h1_semi_product_uv + l2_product_uv,
+                'h1_uvp': h1_semi_product_uvp + l2_product_uvp,
+                'h1_uv_single': h1_semi_product_uv_single + l2_product_uv_single,
+                'h1_semi_u': h1_semi_product_u,
+                'h1_semi_v': h1_semi_product_v,
+                'h1_semi_p': h1_semi_product_p,
+                'h1_semi_uv': h1_semi_product_uv,
+                'h1_semi_uvp': h1_semi_product_uvp,
+                'l2_u': l2_product_u,
+                'l2_v': l2_product_v,
+                'l2_p': l2_product_p,
+                'l2_uv': l2_product_uv,
+                'l2_uvp': l2_product_uvp,
+                'l2_p_single': l2_product_pre,
+                'energy': energy}
 
     parameter_space = p.parameter_space if hasattr(p, 'parameter_space') else None
 
-    discretization = StationaryDiscretization(L, F, products=products, visualizer=visualizer,
-                                              parameter_space=parameter_space, name='{}_CG'.format(p.name))
+    discretization1 = StationaryDiscretization(L, F, products=products, visualizer=visualizer,
+                                               parameter_space=parameter_space, name='{}_CG'.format(p.name))
+    ops = {'operator': L,
+           'supremizer_mass': supremizer_operator_mass,
+           'supremizer_advection': supremizer_operator_advection}
+    discretization2 = StationaryDiscretization(rhs=F, products=products, operators=ops, visualizer=visualizer,
+                                               parameter_space=parameter_space, name='{}_CG'.format(p.name))
 
-    return discretization, {'grid': grid, 'boundary_info': boundary_info}
+    return discretization2, {'grid': grid, 'boundary_info': boundary_info}

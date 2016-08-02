@@ -89,9 +89,22 @@ class DiagonalBlockOperator(NumpyMatrixBasedOperator):
     def _assemble(self, mu=None):
         b = self.blocks
 
-        if len(b) != 2:
-            raise NotImplemented
-        A = bmat([[b[0].assemble(mu)._matrix, None], [None, b[0].assemble(mu)._matrix]])
+        if len(b) == 2:
+            A = bmat([[b[0].assemble(mu)._matrix, None],
+                      [None, b[1].assemble(mu)._matrix]])
+        elif len(b) == 3:
+            A = bmat([[b[0].assemble(mu)._matrix, None, None],
+                      [None, b[1].assemble(mu)._matrix, None],
+                      [None, None, b[2].assemble(mu)._matrix]])
+        else:
+            raise NotImplementedError
 
         return A
+
+    #def projected(self, range_basis, source_basis, product=None, name=None):
+    #    proj_operators = [op.projected(range_basis=range_basis, source_basis=source_basis, product=product)
+    #                      for op in self.blocks]
+
+    #    return super(DiagonalBlockOperator).__init__(proj_operators)
+
 

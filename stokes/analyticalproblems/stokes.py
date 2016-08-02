@@ -1,15 +1,12 @@
 # -*- coding: utf-8 -*-
-# This file is part of the pyMOR project (http://www.pymor.org).
-# Copyright Holders: Rene Milk, Stephan Rave, Felix Schindler
-# License: BSD 2-Clause License (http://opensource.org/licenses/BSD-2-Clause)
 
 from __future__ import absolute_import, division, print_function
-
-import numpy as np
 
 from pymor.analyticalproblems.elliptic import EllipticProblem
 from pymor.domaindescriptions.basic import RectDomain
 from pymor.functions.basic import ConstantFunction
+
+import numpy as np
 
 
 class StokesProblem(EllipticProblem):
@@ -37,6 +34,9 @@ class StokesProblem(EllipticProblem):
                  dirichlet_data=ConstantFunction(value=np.array([[0.0], [0.0]]), dim_domain=2),
                  dirichlet_data_functions=None,
                  dirichlet_data_functionals=None,
+                 # TODO find a better name for |det(D Phi)|
+                 mass_functions=None,
+                 mass_functionals=None,
                  neumann_data=None,
                  robin_data=None,
                  viscosity=1.0,
@@ -63,4 +63,6 @@ class StokesProblem(EllipticProblem):
         self.rhs_functionals = rhs_functionals
         self.dirichlet_data_functions = dirichlet_data_functions
         self.dirichlet_data_functionals = dirichlet_data_functionals
+        self.mass_functions = mass_functions
+        self.mass_functionals = mass_functionals
         self.viscosity = viscosity

@@ -173,11 +173,11 @@ class DiffusionOperatorP2(NumpyMatrixBasedOperator):
                 SF_I1 = np.hstack((SF_I1, DN))
                 del DN
 
-            # assemble global stiffness matrix
-            A = coo_matrix((SF_INTS, (SF_I0, SF_I1)), shape=(num_global_sf, num_global_sf))
-            del SF_INTS, SF_I0, SF_I1
+        # assemble global stiffness matrix
+        A = coo_matrix((SF_INTS, (SF_I0, SF_I1)), shape=(num_global_sf, num_global_sf))
+        del SF_INTS, SF_I0, SF_I1
 
-            return csc_matrix(A).copy()
+        return csc_matrix(A).copy()
 
 
 class L2ProductP2(NumpyMatrixBasedOperator):
@@ -230,12 +230,12 @@ class L2ProductP2(NumpyMatrixBasedOperator):
         bi = self.boundary_info
 
         # quadrature rule
-        q, w = g.reference_element.quadrature(order=2)
+        q, w = g.reference_element.quadrature(order=2, quadrature_type='interior_cubic')
 
         # shape functions evaluated in quadrature points
         SFQ = P2ShapeFunctions(g.dim)(q)
         # TODO: check number of local shape functions
-        num_local_sf = SFQ.shape[-2]
+        num_local_sf = 6
         num_global_sf = g.size(g.dim) + g.size(g.dim - 1)
 
         # integrate the products of the shape functions on each element
@@ -250,9 +250,9 @@ class L2ProductP2(NumpyMatrixBasedOperator):
 
         # determine global dofs
         # vertex nodes
-        VN = self.subentities(0, g.dim)
+        VN = g.subentities(0, g.dim)
         # edge nodes
-        EN = self.subentities(0, g.dim - 1) + g.size(g.dim)
+        EN = g.subentities(0, g.dim - 1) + g.size(g.dim)
         # all nodes
         N = np.concatenate((VN, EN), axis=-1)
         del VN, EN
@@ -267,7 +267,7 @@ class L2ProductP2(NumpyMatrixBasedOperator):
                 # vertex dirichlet mask
                 VDM = bi.dirichlet_mask(g.dim)
                 # edge dirichlet mask
-                EDM = np.np.zeros(g.size(g.dim - 1), dtype=bool)
+                EDM = np.zeros(g.size(g.dim - 1), dtype=bool)
                 # dirichlet mask
                 DM = np.concatenate((VDM, EDM), axis=-1)
                 del VDM, EDM
@@ -303,7 +303,7 @@ class L2ProductP2(NumpyMatrixBasedOperator):
 
             if not self.dirichlet_clear_diag and (self.dirichlet_clear_rows or self.dirichlet_clear_columns):
                 SF_INTS = np.hstack((SF_INTS, np.ones(DN.size)))
-                SF_I0 = np.hstack((SF_I0,DN))
+                SF_I0 = np.hstack((SF_I0, DN))
                 SF_I1 = np.hstack((SF_I1, DN))
             del DN
 
@@ -311,7 +311,8 @@ class L2ProductP2(NumpyMatrixBasedOperator):
         A = coo_matrix((SF_INTS, (SF_I0, SF_I1)), shape=(num_global_sf, num_global_sf))
         del SF_INTS, SF_I0, SF_I1
 
-        return csc_matrix(A).copy()
+        A = csc_matrix(A).copy()
+        return A
 
 
 class AdvectionOperatorP1(NumpyMatrixBasedOperator):
@@ -507,7 +508,7 @@ class RelaxationOperatorP1(NumpyMatrixBasedOperator):
         K      K
     """
 
-    def  __init__(self, grid, relaxation_parameter=0.001, name=None):
+    def  __init__(self, grid, relaxation_parameter=1, name=None):
         self.grid = grid
         self.relaxation_parameter = relaxation_parameter
         self.name = name
@@ -547,6 +548,131 @@ class RelaxationOperatorP1(NumpyMatrixBasedOperator):
 
         # convert to csc format
         A = csc_matrix(A).copy()
+
+        return A
+
+
+class RelaxationOperator2(NumpyMatrixBasedOperator):
+    """Diffusion |Operator| for linear finite elements.
+
+    The operator is of the form ::
+
+        (Lu)(x) = c ∇ ⋅ [ d(x) ∇ u(x) ]
+
+    The function `d` can be scalar- or matrix-valued.
+    The current implementation works in one and two dimensions, but can be trivially
+    extended to arbitrary dimensions.
+
+    Parameters
+    ----------
+    grid
+        The |Grid| for which to assemble the operator.
+    boundary_info
+        |BoundaryInfo| for the treatment of Dirichlet boundary conditions.
+    diffusion_function
+        The |Function| `d(x)` with ``shape_range == ()`` or
+        ``shape_range = (grid.dim_outer, grid.dim_outer)``. If `None`, constant one is
+        assumed.
+    diffusion_constant
+        The constant `c`. If `None`, `c` is set to one.
+    dirichlet_clear_columns
+        If `True`, set columns of the system matrix corresponding to Dirichlet boundary
+        DOFs to zero to obtain a symmetric system matrix. Otherwise, only the rows will
+        be set to zero.
+    dirichlet_clear_diag
+        If `True`, also set diagonal entries corresponding to Dirichlet boundary DOFs to
+        zero (e.g. for affine decomposition). Otherwise they are set to one.
+    name
+        Name of the operator.
+    """
+
+    sparse = True
+
+    def __init__(self, grid, boundary_info, diffusion_function=None, diffusion_constant=None,
+                 dirichlet_clear_columns=False, dirichlet_clear_diag=False,
+                 solver_options=None, alpha=0.1, name=None):
+        assert grid.reference_element(0) in {triangle, line}, 'A simplicial grid is expected!'
+        assert diffusion_function is None \
+            or (isinstance(diffusion_function, FunctionInterface) and
+                diffusion_function.dim_domain == grid.dim_outer and
+                diffusion_function.shape_range == () or diffusion_function.shape_range == (grid.dim_outer,) * 2)
+        self.source = self.range = NumpyVectorSpace(grid.size(grid.dim))
+        self.grid = grid
+        self.boundary_info = boundary_info
+        self.diffusion_constant = diffusion_constant
+        self.diffusion_function = diffusion_function
+        self.dirichlet_clear_columns = dirichlet_clear_columns
+        self.dirichlet_clear_diag = dirichlet_clear_diag
+        self.solver_options = solver_options
+        self.alpha = alpha
+        self.name = name
+        if diffusion_function is not None:
+            self.build_parameter_type(inherits=(diffusion_function,))
+
+    def _assemble(self, mu=None):
+        g = self.grid
+        bi = self.boundary_info
+
+        # gradients of shape functions
+        if g.dim == 2:
+            SF_GRAD = np.array(([-1., -1.],
+                                [1., 0.],
+                                [0., 1.]))
+        elif g.dim == 1:
+            SF_GRAD = np.array(([-1.],
+                                [1., ]))
+        else:
+            raise NotImplementedError
+
+        diameters_square = g.diameters(0)**2
+
+        self.logger.info('Calculate gradients of shape functions transformed by reference map ...')
+        SF_GRADS = np.einsum('eij,pj->epi', g.jacobian_inverse_transposed(0), SF_GRAD)
+
+        self.logger.info('Calculate all local scalar products between gradients ...')
+        if self.diffusion_function is not None and self.diffusion_function.shape_range == ():
+            D = self.diffusion_function(self.grid.centers(0), mu=mu)
+            SF_INTS = np.einsum('epi,eqi,e,e,e->epq', SF_GRADS, SF_GRADS, g.volumes(0), diameters_square, D).ravel()
+            del D
+        elif self.diffusion_function is not None:
+            D = self.diffusion_function(self.grid.centers(0), mu=mu)
+            SF_INTS = np.einsum('epi,eqj,e,e,eij->epq', SF_GRADS, SF_GRADS, g.volumes(0), diameters_square, D).ravel()
+            del D
+        else:
+            SF_INTS = np.einsum('epi,eqi,e,e->epq', SF_GRADS, SF_GRADS, g.volumes(0), diameters_square).ravel()
+
+        del SF_GRADS
+
+        if self.diffusion_constant is not None:
+            SF_INTS *= self.diffusion_constant
+
+        SF_INTS *= self.alpha
+
+        self.logger.info('Determine global dofs ...')
+        SF_I0 = np.repeat(g.subentities(0, g.dim), g.dim + 1, axis=1).ravel()
+        SF_I1 = np.tile(g.subentities(0, g.dim), [1, g.dim + 1]).ravel()
+
+        self.logger.info('Boundary treatment ...')
+        if bi.has_dirichlet:
+            SF_INTS = np.where(bi.dirichlet_mask(g.dim)[SF_I0], 0, SF_INTS)
+            if self.dirichlet_clear_columns:
+                SF_INTS = np.where(bi.dirichlet_mask(g.dim)[SF_I1], 0, SF_INTS)
+
+            if not self.dirichlet_clear_diag:
+                SF_INTS = np.hstack((SF_INTS, np.ones(bi.dirichlet_boundaries(g.dim).size)))
+                SF_I0 = np.hstack((SF_I0, bi.dirichlet_boundaries(g.dim)))
+                SF_I1 = np.hstack((SF_I1, bi.dirichlet_boundaries(g.dim)))
+
+        self.logger.info('Assemble system matrix ...')
+        A = coo_matrix((SF_INTS, (SF_I0, SF_I1)), shape=(g.size(g.dim), g.size(g.dim)))
+        del SF_INTS, SF_I0, SF_I1
+        A = csc_matrix(A).copy()
+
+        # The call to copy() is necessary to resize the data arrays of the sparse matrix:
+        # During the conversion to crs_matrix, entries corresponding with the same
+        # coordinates are summed up, resulting in shorter data arrays. The shortening
+        # is implemented by calling self.prune() which creates the view self.data[:self.nnz].
+        # Thus, the original data array is not deleted and all memory stays allocated.
 
         return A
 
@@ -721,7 +847,10 @@ class L2VectorProductFunctionalP2(NumpyMatrixBasedOperator):
 
         if transformation_function is not None:
             self.build_parameter_type(inherits=(transformation_function,))
-        self.parameter_type = {'transformation': (2, 2)}
+        #self.parameter_type = {'transformation': (2, 2)}
+
+        #if transformation_function is not None:
+        #    self.build_parameter_type(inherits=(transformation_function,))
 
     def _assemble(self, mu=None):
         g = self.grid
@@ -837,7 +966,7 @@ class ZeroOperator(NumpyMatrixBasedOperator):
 
         if self.sparse:
             # return a sparse matrix in csc format
-            return csc_matrix(shape=(r, s))
+            return csc_matrix((r, s))
         else:
             # return a dense matrix
             return np.zeros(shape=(r, s))
