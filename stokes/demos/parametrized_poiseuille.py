@@ -4,7 +4,8 @@ from pymor.algorithms.gram_schmidt import gram_schmidt
 from pymor.parameters.base import Parameter
 from pymor.vectorarrays.numpy import NumpyVectorArray, NumpyVectorSpace
 
-from stokes.algorithms.algorithms import generate_snapshots, lift_pressure_solution
+from stokes.algorithms.algorithms import generate_snapshots, lift_pressure_solution, sample_training_set_randomly, \
+    sample_training_set_uniformly
 from stokes.algorithms.rb_generation import reduce_generic_rb_stokes
 from stokes.analyticalproblems.affine_transformed_stokes import AffineTransformedStokes
 from stokes.analyticalproblems.poiseuille import PoiseuilleProblem
@@ -48,48 +49,6 @@ def setup_discretization(problem, diameter, fem_order):
     return discretization, data
 
 
-def sample_training_set_randomly(problem, basis_size):
-    assert isinstance(problem, AffineTransformedStokes)
-    assert isinstance(basis_size, int)
-
-    print('Sampling parameter space randomly with basis size {}'.format(basis_size))
-    tic = time.time()
-    training_set = problem.parameter_space.sample_randomly(basis_size)
-    toc = time.time()
-    print('Sampling took {} s'.format(toc - tic))
-
-    data = {'time': toc - tic}
-
-    return training_set, data
-
-
-def sample_training_set_uniformly(problem, basis_size):
-    assert isinstance(problem, AffineTransformedStokes)
-    assert isinstance(basis_size, int)
-
-    print('Sampling parameter space randomly with basis size {}'.format(basis_size))
-    tic = time.time()
-    training_set = problem.parameter_space.sample_uniformly(basis_size)
-    toc = time.time()
-    print('Sampling took {} s'.format(toc - tic))
-
-    data = {'time': toc - tic}
-
-    return training_set, data
-
-
-def solve_fem(discretization, parameter):
-    print('Solving for parameter {}'.format(parameter))
-    tic = time.time()
-    solution = discretization.solve(parameter)
-    toc = time.time()
-    print('Solving took {} s'.format(toc - tic))
-
-    data = {'time': toc - tic}
-
-    return solution, data
-
-
 def build_parameter_from_parametrization(parameter):
     assert isinstance(parameter, Parameter)
 
@@ -123,51 +82,8 @@ def offline_supremizer(discretization, velocity_rb, pressure_rb, test_parameters
     return supremizer_rb
 
 
-def plot_transformed_pyplot(solution, grid, transformation, parameter, fem_order, velocity='quiver'):
-
-    assert isinstance(velocity, str)
-    assert velocity in ('quiver', 'absolute')
-    n_p1 = grid.size(2)
-    n_p2 = grid.size(2) + grid.size(1)
-
-    if fem_order == 1:
-        u = solution.data[0, 0:n_p1]
-        v = solution.data[0, n_p1:2*n_p1]
-        p = solution.data[0, 2*n_p1:]
-    elif fem_order == 2:
-        u = solution.data[0, 0:n_p1]
-        v = solution.data[0, n_p2:n_p2+n_p1]
-        p = solution.data[0, 2*n_p2:]
-    else:
-        raise ValueError
-
-    # lift p
-    p -= p.min()
-
-    X = transformation.evaluate(grid.centers(2), mu=parameter)
-
-    x = X[..., 0]
-    y = X[..., 1]
-
-    # plot p
-    plt.figure('pressure for mu = {}'.format(parameter))
-    plt.tripcolor(x, y, grid.subentities(0, 2), p)
-    plt.colorbar()
-
-    # plot u
-    if velocity == 'quiver':
-        plt.figure('velocity for mu = {}'.format(parameter))
-        plt.quiver(x, y, u, v)
-    elif velocity == 'absolute':
-        plt.figure('absolute velocity for mu = {}'.format(parameter))
-        plt.tripcolor(x, y, grid.subentities(0, 2), np.sqrt(u**2 + v**2))
-        plt.colorbar()
-
-
-
 def main():
     # PARAMETERS
-    problem_number = 1
     width = 1
     height = 1
     viscosity = 1
@@ -204,21 +120,10 @@ def main():
     discretization, data = setup_discretization(transformed_problem, diameter, fem_order)
     grid = data['grid']
 
-    products = {'h1_u': discretization.products['h1_u'],
-                'h1_v': discretization.products['h1_v'],
-                'h1_uv': discretization.products['h1_uv'],
-                'l2_p': discretization.products['l2_p'],
-                'energy': discretization.products['energy']}
-
     products = {'h1_uv': discretization.products['h1_uv'],
                 'l2_p': discretization.products['l2_p']}
 
-    #u_test = discretization.solve(mu=test_parameter)
-    #plot_transformed_pyplot(u_test, grid, transformation, test_parameter, fem_order)
-
-    absolute_errors = {}
-    relative_errors = {}
-
+    # calculate test solutions
     test_solutions = []
     for i, p in enumerate(test_parameters):
         print('Solve reference solution for test parameter {} of {} with mu={}'.format(i+1, test_size, p))
@@ -226,8 +131,7 @@ def main():
         sol_lift = lift_pressure_solution(sol, grid, fem_order)
         test_solutions.append(sol_lift)
 
-    #discretization.visualize(test_solutions[0], mu=test_parameters[0], transformation=transformation)
-
+    # sample training set
     if sample_strategy == 'randomly':
         training_set, sampling_time = sample_training_set_randomly(transformed_problem, basis_size)
     elif sample_strategy == 'uniformly':
@@ -238,27 +142,33 @@ def main():
     # build snapshots
     velocity_rb, pressure_rb = generate_snapshots(discretization, training_set, grid, element_type, False)
 
+    # offline supremizer
     if supremizer:
         if not online_supremizer:
             supremizer_rb = offline_supremizer(discretization, velocity_rb, pressure_rb, training_set)
 
+    # pod
     if pod:
         from pymor.algorithms.pod import pod
+        # velocity
         print('Performing POD for velocity...')
         vel_rb, vel_svals = pod(velocity_rb, len(training_set), product=discretization.products['h1_uv_single'])
 
+        # pressure
         print('Performing POD for pressure...')
         pre_rb, pre_svals = pod(pressure_rb, len(training_set), product=discretization.products['l2_p_single'])
 
+        # offline supremizer
         if supremizer:
             if not online_supremizer:
+                print('Performing POD for offline supremizer...')
                 sup_rb, sup_svals = pod(supremizer_rb, len(training_set), product=discretization.products['h1_uv_single'])
     else:
         if orthonormalize:
             vel_rb = gram_schmidt(velocity_rb, product=discretization.products['h1_uv_single'])
             pre_rb = gram_schmidt(pressure_rb, product=discretization.products['l2_p_single'])
 
-    working_list = []
+    # maximal rb size
     if supremizer:
         if not online_supremizer:
             max_rb_size = min(len(vel_rb), len(pre_rb), len(sup_rb), max_rb)
@@ -281,12 +191,11 @@ def main():
         v_rb = NumpyVectorArray(vel_rb.data[0:i+1, :])
         p_rb = NumpyVectorArray(pre_rb.data[0:i+1, :])
 
+        # append offline supremizer to velocity rb
         if supremizer:
             if not online_supremizer:
                 s_rb = NumpyVectorArray(sup_rb.data[0:i+1, :])
                 v_rb.append(s_rb)
-
-        #velocity_rb, pressure_rb = generate_snapshots(discretization, working_list, grid, element_type, orthonormalize)
 
         # reduced discretization
         if supremizer:
@@ -297,8 +206,8 @@ def main():
             else:
                 print('Generating reduced discretization with offline supremizers ')
                 reduced_discretization, reconstructor, reduced_data = reduce_generic_rb_stokes(discretization,
-                                                                                           v_rb, p_rb,
-                                                                                           None, None, None)
+                                                                                               v_rb, p_rb,
+                                                                                               None, None, None)
         else:
             print('Generating reduced discretization without online supremizers')
             reduced_discretization, reconstructor, reduced_data = reduce_generic_rb_stokes(discretization,

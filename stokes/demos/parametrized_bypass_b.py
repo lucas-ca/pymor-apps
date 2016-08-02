@@ -35,9 +35,6 @@ def setup_problem(viscosity=1):
 def setup_transformation(domain, parameter_mapping, ranges):
     parameter_type = {'tau': 0, 'rho': 0, 'theta': 0}
     transformation = PiecewiseAffineTransformation(domain, parameter_mapping, parameter_type, ranges)
-    #transformation = AffineTransformation(parameter_type=parameter_type, ranges=ranges,
-    #                                      parameter_mapping=parameter_mapping,
-    #                                      name='AffineTransformation')
 
     return transformation
 
@@ -105,7 +102,7 @@ def calculate_rb_solution(discretization, grid, fem_order, velocity_rb, pressure
     else:
         print('Generating reduced discretization without supremizers')
         reduced_discretization, reconstructor, reduced_data = reduce_generic_rb_stokes(discretization, v_rb,
-                                                                                             p_rb, None, None, None)
+                                                                                       p_rb, None, None, None)
     u_rb = reduced_discretization.solve(test_parameter)
     u_rb_rec = reconstructor.reconstruct(u_rb)
     u_rb_rec_lift = lift_pressure_solution(u_rb_rec, grid, fem_order)
@@ -117,9 +114,6 @@ def main():
 
     viscosity = 1
     fem_order = 1
-    plot_type = 1
-    resolution = 10
-    h = 10
     refinement_steps = 3
     basis_size = 100
     range_size = 8
@@ -185,10 +179,6 @@ def main():
             example_sols.append(sol_lift)
             plot_transformed_pyplot(sol_lift, grid, transformation, mu, fem_order, 'absolute')
 
-        #plot_multiple_transformed_pyplot(example_sols, grid, transformation,
-        #                                 Parameter({'tau': 1.0, 'rho': 1.0, 'theta': 0.0}), fem_order,
-        #                                 velocity='absolute', rescale_colorbars=False)
-
     test_parameters, sampling_time = sample_training_set_randomly(transformed_problem, test_size)
 
     products = {'h1_uv': discretization.products['h1_uv'],
@@ -200,9 +190,6 @@ def main():
         sol = discretization.solve(p)
         sol_lift = lift_pressure_solution(sol, grid, fem_order)
         test_solutions.append(sol_lift)
-        #xy_trans = transformation.evaluate(grid.centers(2), p)
-        #plt.triplot(xy_trans[..., 0], xy_trans[..., 1], grid.subentities(0, 2))
-
 
     if sample_strategy == 'randomly':
         training_set, sampling_time = sample_training_set_randomly(transformed_problem, basis_size)
@@ -281,8 +268,8 @@ def main():
             else:
                 print('Generating reduced discretization with offline supremizers ')
                 reduced_discretization, reconstructor, reduced_data = reduce_generic_rb_stokes(discretization,
-                                                                                           v_rb, p_rb,
-                                                                                           None, None, None)
+                                                                                               v_rb, p_rb,
+                                                                                               None, None, None)
         else:
             print('Generating reduced discretization without supremizers')
             reduced_discretization, reconstructor, reduced_data = reduce_generic_rb_stokes(discretization,
@@ -314,94 +301,15 @@ def main():
                 rec_sol_lift = lift_pressure_solution(rec_sol, grid, fem_order)
                 ae = absolute_error(test_solutions[i_p], rec_sol_lift, product)[0]
                 re = relative_error(test_solutions[i_p], rec_sol_lift, product)[0]
-                #if k == "h1_uv":
-                #    norm = discretization.h1_uv_norm
-                #elif k == "l2_p":
-                #    norm = discretization.l2_p_norm
-                #ae_ = absolute_error_disc(test_solutions[i_p], rec_sol_lift, norm)
-                #re_ = relative_error_disc(test_solutions[i_p], rec_sol_lift, norm)
+
                 abs_errors[k][i, i_p] = ae
                 rel_errors[k][i, i_p] = re
-                #if not ae == ae_ or not re == re_:
-                #    z = 0
-                #if k in absolute_errors.keys():
-                #    absolute_errors[k].append(ae)
-                #else:
-                #    absolute_errors[k] = [ae]
-                #if k in relative_errors.keys():
-                #    relative_errors[k].append(re)
-                #else:
-                #    relative_errors[k] = [re]
 
     if plot_example_rb:
         if test_rb_size_1 > max_rb_size or test_rb_size_2 > max_rb_size:
             raise ValueError
         u_ref = discretization.solve(test_parameter_rb)
         u_ref = lift_pressure_solution(u_ref, grid, fem_order)
-
-        # rb 1
-        """
-        v_rb_1 = NumpyVectorArray(vel_rb.data[0:test_rb_size_1+1, :])
-        p_rb_1 = NumpyVectorArray(pre_rb.data[0:test_rb_size_1+1, :])#
-
-        if supremizer:
-            # offline supremizer
-            if not online_supremizer:
-                s_rb_1 = NumpyVectorArray(sup_rb.data[0:test_rb_size_1+1, :])
-                v_rb_1.append(s_rb_1)
-
-        # reduced discretization
-        if supremizer:
-            if online_supremizer:
-                print('Generating reduced discretization with online supremizers ')
-                reduced_discretization_1 = ReducedSupremizerStokesDiscretization(discretization, v_rb_1, p_rb_1,
-                                                                                 orthonormalize=True)
-            else:
-                print('Generating reduced discretization with offline supremizers ')
-                reduced_discretization_1, reconstructor_1, reduced_data_1 = reduce_generic_rb_stokes(discretization,
-                                                                                                     v_rb_1, p_rb_1,
-                                                                                                     None, None, None)
-        else:
-            print('Generating reduced discretization without supremizers')
-            reduced_discretization_1, reconstructor_1, reduced_data_1 = reduce_generic_rb_stokes(discretization,
-                                                                                                 v_rb_1, p_rb_1,
-                                                                                                 None, None, None)
-        u_rb_1 = reduced_discretization_1.solve(test_parameter_rb)
-        u_rb_rec_1 = reconstructor_1.reconstruct(u_rb_1)
-        """
-
-        # rb 2
-        """
-        v_rb_2 = NumpyVectorArray(vel_rb.data[0:test_rb_size_2+1, :])
-        p_rb_2 = NumpyVectorArray(pre_rb.data[0:test_rb_size_2+1, :])
-
-        if supremizer:
-            # offline supremizer
-            if not online_supremizer:
-                s_rb_2 = NumpyVectorArray(sup_rb.data[0:test_rb_size_2+1, :])
-                v_rb_2.append(s_rb_2)
-
-        # reduced discretization
-        if supremizer:
-            if online_supremizer:
-                print('Generating reduced discretization with online supremizers ')
-                reduced_discretization_2 = ReducedSupremizerStokesDiscretization(discretization, v_rb_2, p_rb_2,
-                                                                                 orthonormalize=True)
-            else:
-                print('Generating reduced discretization with offline supremizers ')
-                reduced_discretization_2, reconstructor_2, reduced_data_2 = reduce_generic_rb_stokes(discretization,
-                                                                                                     v_rb_2, p_rb_2,
-                                                                                                     None, None, None)
-        else:
-            print('Generating reduced discretization without supremizers')
-            reduced_discretization_2, reconstructor_2, reduced_data_2 = reduce_generic_rb_stokes(discretization,
-                                                                                                 v_rb_2, p_rb_2,
-                                                                                                 None, None, None)
-        u_rb_2 = reduced_discretization_2.solve(test_parameter_rb)
-        u_rb_rec_2 = reconstructor_2.reconstruct(u_rb_2)
-        u_rb_rec_lift_2 = lift_pressure_solution(u_rb_rec_2, grid, fem_order)
-        e2 = u_ref - u_rb_rec_lift_2
-        """
 
         u_rb_rec_lift_1 = calculate_rb_solution(discretization, grid, fem_order, vel_rb, pre_rb, sup_rb, test_rb_size_1,
                                                 supremizer, online_supremizer, test_parameter_rb)

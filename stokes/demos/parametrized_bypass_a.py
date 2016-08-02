@@ -33,9 +33,6 @@ def setup_problem(viscosity=1):
 def setup_transformation(domain, parameter_mapping, ranges):
     parameter_type = {'tau': 0}
     transformation = PiecewiseAffineTransformation(domain, parameter_mapping, parameter_type, ranges)
-    #transformation = AffineTransformation(parameter_type=parameter_type, ranges=ranges,
-    #                                      parameter_mapping=parameter_mapping,
-    #                                      name='AffineTransformation')
 
     return transformation
 
@@ -77,10 +74,7 @@ def build_parameter_from_parametrization(parameter):
 def main():
 
     viscosity = 1
-    fem_order = 2
-    plot_type = 1
-    resolution = 10
-    h = 10
+    fem_order = 1
     refinement_steps = 2
     basis_size = 100
     range_size = 200
@@ -156,9 +150,6 @@ def main():
         sol = discretization.solve(p)
         sol_lift = lift_pressure_solution(sol, grid, fem_order)
         test_solutions.append(sol_lift)
-        #xy_trans = transformation.evaluate(grid.centers(2), p)
-        #plt.triplot(xy_trans[..., 0], xy_trans[..., 1], grid.subentities(0, 2))
-
 
     if sample_strategy == 'randomly':
         training_set, sampling_time = sample_training_set_randomly(transformed_problem, basis_size)
@@ -235,8 +226,8 @@ def main():
             else:
                 print('Generating reduced discretization with offline supremizers ')
                 reduced_discretization, reconstructor, reduced_data = reduce_generic_rb_stokes(discretization,
-                                                                                           v_rb, p_rb,
-                                                                                           None, None, None)
+                                                                                               v_rb, p_rb,
+                                                                                               None, None, None)
         else:
             print('Generating reduced discretization without supremizers')
             reduced_discretization, reconstructor, reduced_data = reduce_generic_rb_stokes(discretization,
@@ -245,7 +236,8 @@ def main():
 
         for i_p, test_p in enumerate(test_parameters):
             print('Solving reduced discretization for test parameter {}/{} with rb size {}/{}'.format(i_p+1, test_size,
-                                                                                                      len(p_rb), max_rb_size))
+                                                                                                      len(p_rb),
+                                                                                                      max_rb_size))
             tic = time.time()
             if supremizer:
                 if online_supremizer:
@@ -268,24 +260,8 @@ def main():
                 rec_sol_lift = lift_pressure_solution(rec_sol, grid, fem_order)
                 ae = absolute_error(test_solutions[i_p], rec_sol_lift, product)[0]
                 re = relative_error(test_solutions[i_p], rec_sol_lift, product)[0]
-                #if k == "h1_uv":
-                #    norm = discretization.h1_uv_norm
-                #elif k == "l2_p":
-                #    norm = discretization.l2_p_norm
-                #ae_ = absolute_error_disc(test_solutions[i_p], rec_sol_lift, norm)
-                #re_ = relative_error_disc(test_solutions[i_p], rec_sol_lift, norm)
                 abs_errors[k][i, i_p] = ae
                 rel_errors[k][i, i_p] = re
-                #if not ae == ae_ or not re == re_:
-                #    z = 0
-                #if k in absolute_errors.keys():
-                #    absolute_errors[k].append(ae)
-                #else:
-                #    absolute_errors[k] = [ae]
-                #if k in relative_errors.keys():
-                #    relative_errors[k].append(re)
-                #else:
-                #    relative_errors[k] = [re]
 
     if plot_example_rb:
         if test_rb_size_1 > max_rb_size or test_rb_size_2 > max_rb_size:
