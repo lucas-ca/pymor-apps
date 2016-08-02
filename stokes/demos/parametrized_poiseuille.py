@@ -87,7 +87,7 @@ def main():
     width = 1
     height = 1
     viscosity = 1
-    fem_order = 1
+    fem_order = 2
     diameter = 1./50.
     basis_size = 100
     range_size = 8

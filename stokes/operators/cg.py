@@ -16,6 +16,7 @@ from pymor.vectorarrays.interfaces import VectorSpace
 
 from stokes.functions.finite_elements import P1ShapeFunctions, P1ShapeFunctionGradients
 from stokes.functions.finite_elements import P2ShapeFunctions, P2ShapeFunctionGradients
+from stokes.functions.quadratures import high_order_triangle_quadrature
 
 
 class DiffusionOperatorP2(NumpyMatrixBasedOperator):
@@ -230,7 +231,7 @@ class L2ProductP2(NumpyMatrixBasedOperator):
         bi = self.boundary_info
 
         # quadrature rule
-        q, w = g.reference_element.quadrature(order=2, quadrature_type='interior_cubic')
+        q, w = high_order_triangle_quadrature(order=2, quadrature_type='interior_cubic')
 
         # shape functions evaluated in quadrature points
         SFQ = P2ShapeFunctions(g.dim)(q)
@@ -503,56 +504,6 @@ class AdvectionOperatorP2(NumpyMatrixBasedOperator):
 
 
 class RelaxationOperatorP1(NumpyMatrixBasedOperator):
-    """An operator for stabilization of stokes problem. It has the form ::
-        Σ h_K² ∫ ∇ p_h ∇ q_h.
-        K      K
-    """
-
-    def  __init__(self, grid, relaxation_parameter=1, name=None):
-        self.grid = grid
-        self.relaxation_parameter = relaxation_parameter
-        self.name = name
-
-        self.source = NumpyVectorSpace(grid.size(grid.dim))
-        self.range = NumpyVectorSpace(grid.size(grid.dim))
-        self.sparse = True
-
-    def _assemble(self, mu=None):
-        g = self.grid
-
-        # diameters
-        # TODO: try pymors diameter
-        t = g.centers(g.dim)[g.subentities(0, g.dim)]
-        T = np.abs(t[:, [0, 0, 1], :] - t[:, [1, 2, 2], :])
-        diameters = self.relaxation_parameter * np.max(np.linalg.norm(T, 2, 2)**2, axis=1)
-
-        # quadrature rule on reference element
-        q, w = g.reference_element.quadrature(order=2)
-
-        # gradients of shape functions
-        SF_GRAD = P1ShapeFunctionGradients(g.dim)
-
-        # gradients of shape functions transformed by refeeerence map
-        SF_GRADS = np.einsum('eij,pj->epi', g.jacobian_inverse_transposed(0), SF_GRAD)
-
-        # calculate scalar products between transformed gradients of shape functions
-        SF_INTS = np.einsum('epi,eqi,e,e->epq', SF_GRADS, SF_GRADS, g.volumes(0), diameters).ravel()
-
-        # determine global dofs
-        SF_I0 = np.repeat(g.subentities(0, g.dim), g.dim + 1, axis=1).ravel()
-        SF_I1 = np.tile(g.subentities(0, g.dim), [1, g.dim + 1]).ravel()
-
-        # assemble system matrix
-        A = coo_matrix((SF_INTS, (SF_I0, SF_I1)), shape=(g.size(g.dim), g.size(g.dim)))
-        del SF_INTS, SF_I0, SF_I1
-
-        # convert to csc format
-        A = csc_matrix(A).copy()
-
-        return A
-
-
-class RelaxationOperator2(NumpyMatrixBasedOperator):
     """Diffusion |Operator| for linear finite elements.
 
     The operator is of the form ::
